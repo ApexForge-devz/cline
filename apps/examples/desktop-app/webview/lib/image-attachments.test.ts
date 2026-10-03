@@ -9,6 +9,7 @@ import {
 	imageAttachmentMediaType,
 	isSupportedImageAttachment,
 	isUnsupportedImageAttachment,
+	localOllamaImageAttachmentError,
 } from "./image-attachments";
 
 describe("image attachments", () => {
@@ -100,4 +101,28 @@ it.each([
 ])("identifies unsupported %s images for the attachment checkpoint", async (extension) => {
 	const file = new File(["image data"], `photo.${extension}`);
 	expect(isUnsupportedImageAttachment(file)).toBe(true);
+});
+
+
+describe("localOllamaImageAttachmentError", () => {
+	it("accepts a 4 MiB image under the default local budget", () => {
+		expect(localOllamaImageAttachmentError([{ size: 4 * 1024 * 1024 }])).toBeUndefined();
+	});
+
+	it("reports the encoded limit precisely", () => {
+		const error = localOllamaImageAttachmentError(
+			[{ size: 4 * 1024 * 1024 }],
+			{ maxImageEncodedBytes: 5 * 1024 * 1024 },
+		);
+		expect(error).toContain("encoded payload");
+		expect(error).toContain("5.00 MiB");
+	});
+
+	it("enforces the aggregate local media budget", () => {
+		const error = localOllamaImageAttachmentError(
+			[{ size: 4 * 1024 * 1024 }, { size: 4 * 1024 * 1024 }],
+			{ maxTotalMediaBytes: 6 * 1024 * 1024 },
+		);
+		expect(error).toContain("total limit");
+	});
 });

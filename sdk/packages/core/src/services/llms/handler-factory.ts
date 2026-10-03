@@ -42,6 +42,7 @@ function buildGatewayProviderOptions(
 		apiLine: config.apiLine,
 		openRouterProviderSorting: config.openRouterProviderSorting,
 		modelCatalog: config.modelCatalog,
+		ollamaGeneration: config.ollamaGeneration,
 	};
 
 	if (usesOpenAICompatibleClient(config)) {
@@ -205,14 +206,19 @@ export function createAgentModelFromConfig(
 	logger: BasicLogger | undefined,
 	telemetry?: ITelemetryService,
 ): AgentModel {
+	const connectionProviderConfig = resolveConnectionProviderConfig(config);
 	const normalizedProviderConfig: ProviderConfig = {
-		...resolveConnectionProviderConfig(config),
+		...connectionProviderConfig,
 		knownModels: resolveKnownModelsFromConfig(config),
-		maxOutputTokens: config.maxTokensPerTurn,
-		temperature: config.temperature,
-		reasoningEffort: config.reasoningEffort,
-		thinkingBudgetTokens: config.thinkingBudgetTokens,
-		thinking: config.thinking,
+		maxOutputTokens:
+			config.maxTokensPerTurn ?? connectionProviderConfig.maxOutputTokens,
+		temperature: config.temperature ?? connectionProviderConfig.temperature,
+		reasoningEffort:
+			config.reasoningEffort ?? connectionProviderConfig.reasoningEffort,
+		thinkingBudgetTokens:
+			config.thinkingBudgetTokens ??
+				connectionProviderConfig.thinkingBudgetTokens,
+		thinking: config.thinking ?? connectionProviderConfig.thinking,
 		logger,
 		extensionContext: config.extensionContext,
 	};

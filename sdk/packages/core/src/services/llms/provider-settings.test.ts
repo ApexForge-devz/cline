@@ -89,6 +89,117 @@ describe("provider settings", () => {
 		});
 	});
 
+
+	it("resolves Ollama model overrides over provider defaults", () => {
+		const config = toProviderConfig(
+			{
+				provider: "ollama",
+				model: "vision-model",
+				contextWindow: 65_536,
+				maxTokens: 8192,
+				timeout: 120_000,
+				reasoning: { enabled: true, effort: "medium", budgetTokens: 4096 },
+				modelOverrides: {
+					"vision-model": {
+						contextWindow: 32_768,
+						maxTokens: 4096,
+						reasoning: { enabled: false, effort: "low", budgetTokens: 1024 },
+					},
+				},
+			},
+			{ modelId: "vision-model" },
+		);
+
+		expect(config).toMatchObject({
+			modelId: "vision-model",
+			maxInputTokens: 32_768,
+			maxOutputTokens: 4096,
+			timeoutMs: 120_000,
+			thinking: false,
+			reasoningEffort: "low",
+			thinkingBudgetTokens: 1024,
+		});
+	});
+
+	it("uses the safe Ollama context default when no explicit context exists", () => {
+		expect(toProviderConfig({ provider: "ollama", model: "local-model" })).toMatchObject({
+			maxInputTokens: 32_768,
+		});
+	});
+
+	it("preserves validated Ollama generation settings and normalizes stop sequences", () => {
+		const result = safeParseSettings({
+			provider: "ollama",
+			model: "local-model",
+			ollamaGeneration: {
+				temperature: 0.2,
+				topP: 0.95,
+				topK: 40,
+				minP: 0.05,
+				repeatPenalty: 1.1,
+				repeatLastN: -1,
+				seed: 42,
+				stop: "<tool_call>\n<|end|>",
+				keepAlive: "5m",
+			},
+		});
+		expect(result.success).toBe(true);
+		const config = toProviderConfig(result.success ? result.data : { provider: "ollama" });
+		expect(config.ollamaGeneration).toEqual({
+			temperature: 0.2,
+			topP: 0.95,
+			topK: 40,
+			minP: 0.05,
+			repeatPenalty: 1.1,
+			repeatLastN: -1,
+			seed: 42,
+			stop: ["<tool_call>", "<|end|>"],
+			keepAlive: "5m",
+		});
+	});
+
+	it("rejects invalid Ollama generation ranges", () => {
+		const result = safeParseSettings({
+			provider: "ollama",
+			ollamaGeneration: { topP: 1.2, minP: -0.1, topK: 0 },
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it("accepts per-model local provider overrides with explicit capability enable/disable", () => {
+		const result = safeParseSettings({
+			provider: "ollama",
+			modelOverrides: {
+				"vision-model": {
+					contextWindow: 32768,
+					maxTokens: 4096,
+					reasoning: { enabled: false, effort: "high", budgetTokens: 2048 },
+					capabilities: { vision: true, tools: false, reasoning: false },
+				},
+			},
+		});
+
+		expect(result.success).toBe(true);
+		if (!result.success) throw new Error("expected Ollama model overrides to parse");
+		expect(result.data.modelOverrides?.["vision-model"]).toEqual({
+			contextWindow: 32768,
+			maxTokens: 4096,
+			reasoning: { enabled: false, effort: "high", budgetTokens: 2048 },
+			capabilities: { vision: true, tools: false, reasoning: false },
+		});
+	});
+
+	it("rejects unknown fields in per-model overrides", () => {
+		const result = safeParseSettings({
+			provider: "ollama",
+			modelOverrides: {
+				model: { unsupported: true },
+			},
+		});
+
+		expect(result.success).toBe(false);
+	});
+
 	it("keeps the provider default base URL when no apiLine is set", () => {
 		expect(toProviderConfig({ provider: "zai" })).toMatchObject({
 			baseUrl: "https://api.z.ai/api/paas/v4",

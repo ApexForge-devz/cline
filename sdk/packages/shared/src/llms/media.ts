@@ -82,6 +82,13 @@ export const DEFAULT_MAX_IMAGE_ENCODED_BYTES = DEFAULT_MAX_IMAGE_BASE64_BYTES;
 export const DEFAULT_MAX_IMAGE_DECODED_BYTES = 6 * 1024 * 1024;
 export const DEFAULT_MAX_TOTAL_MEDIA_BYTES = 8 * 1024 * 1024;
 
+/** Local Ollama transport defaults. These are provider-policy values, not model capabilities. */
+export const OLLAMA_DEFAULT_MEDIA_BUDGET = {
+	maxImageEncodedBytes: 12 * 1024 * 1024,
+	maxImageDecodedBytes: 8 * 1024 * 1024,
+	maxTotalMediaBytes: 24 * 1024 * 1024,
+};
+
 export interface ImageMediaLimits {
 	maxEncodedBytes?: number;
 	maxDecodedBytes?: number;

@@ -8,6 +8,7 @@
 import type {
 	BasicLogger,
 	ExtensionContext,
+	MediaBudgetOptions,
 	ReasoningEffort,
 } from "@cline/shared";
 import type { ModelInfo, ProviderClient } from "../catalog/types";
@@ -252,11 +253,25 @@ export interface CloudConfig {
 /**
  * Provider-specific options that don't fit other categories
  */
+export interface OllamaGenerationOptions {
+	temperature?: number;
+	topP?: number;
+	topK?: number;
+	minP?: number;
+	repeatPenalty?: number;
+	repeatLastN?: number;
+	seed?: number;
+	stop?: string[];
+	keepAlive?: string | number;
+}
+
 export interface ProviderOptions {
 	/** OpenRouter provider sorting preference */
 	openRouterProviderSorting?: string;
 	/** Runtime model catalog refresh configuration */
 	modelCatalog?: ModelCatalogConfig;
+	/** Native Ollama generation controls. */
+	ollamaGeneration?: OllamaGenerationOptions;
 }
 
 /**
@@ -312,6 +327,9 @@ export interface ProviderConfig
 	 * reusing the runtime behavior of a built-in provider implementation.
 	 */
 	routingProviderId?: ProviderId;
+
+	/** Provider-aware media transport policy. */
+	mediaBudget?: MediaBudgetOptions;
 
 	/** Capabilities this provider/model supports */
 	capabilities?: ProviderCapability[];

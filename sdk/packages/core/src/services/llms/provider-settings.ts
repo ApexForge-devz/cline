@@ -1,5 +1,10 @@
 import * as Llms from "@cline/llms";
-import { ReasoningLevelSchema } from "@cline/shared";
+import {
+	OLLAMA_DEFAULT_CONTEXT_WINDOW,
+	OLLAMA_DEFAULT_MEDIA_BUDGET,
+	ReasoningLevelSchema,
+	type MediaBudgetOptions,
+} from "@cline/shared";
 import { z } from "zod";
 import {
 	DEFAULT_EXTERNAL_OCA_BASE_URL,
@@ -139,6 +144,63 @@ export const ModelCatalogSettingsSchema = z.object({
 export type ModelCatalogSettings = z.infer<typeof ModelCatalogSettingsSchema>;
 export type ModelCatalogConfig = ModelCatalogSettings;
 
+export const ProviderModelCapabilityOverridesSchema = z
+	.object({
+		vision: z.boolean().optional(),
+		tools: z.boolean().optional(),
+		reasoning: z.boolean().optional(),
+	})
+	.strict();
+
+export const ProviderModelSettingsOverrideSchema = z
+	.object({
+		contextWindow: z.number().int().positive().optional(),
+		maxTokens: z.number().int().positive().optional(),
+		reasoning: ReasoningSettingsSchema.optional(),
+		capabilities: ProviderModelCapabilityOverridesSchema.optional(),
+	})
+	.strict();
+
+export const ProviderModelSettingsOverridesSchema = z.record(
+	z.string().min(1),
+	ProviderModelSettingsOverrideSchema,
+);
+
+export type ProviderModelSettingsOverride = z.infer<
+	typeof ProviderModelSettingsOverrideSchema
+>;
+export type ProviderModelSettingsOverrides = z.infer<
+	typeof ProviderModelSettingsOverridesSchema
+>;
+
+export const ProviderMediaBudgetSchema = z
+	.object({
+		maxImageEncodedBytes: z.number().int().positive().optional(),
+		maxImageDecodedBytes: z.number().int().positive().optional(),
+		maxTotalMediaBytes: z.number().int().positive().optional(),
+	})
+	.strict();
+
+export type ProviderMediaBudget = z.infer<typeof ProviderMediaBudgetSchema>;
+
+export const OllamaGenerationSettingsSchema = z
+	.object({
+		temperature: z.number().finite().min(0).optional(),
+		topP: z.number().finite().min(0).max(1).optional(),
+		topK: z.number().int().positive().optional(),
+		minP: z.number().finite().min(0).max(1).optional(),
+		repeatPenalty: z.number().finite().positive().optional(),
+		repeatLastN: z.number().int().min(-1).optional(),
+		seed: z.number().int().min(0).optional(),
+		stop: z.union([z.string(), z.array(z.string())]).optional(),
+		keepAlive: z.union([z.string(), z.number().finite()]).optional(),
+	})
+	.strict();
+
+export type OllamaGenerationSettings = z.infer<
+	typeof OllamaGenerationSettingsSchema
+>;
+
 export const ProviderSettingsSchema = z.object({
 	provider: ProviderIdSchema,
 	apiKey: z.string().optional(),
@@ -153,6 +215,9 @@ export const ProviderSettingsSchema = z.object({
 	headers: z.record(z.string(), z.string()).optional(),
 	timeout: z.number().int().positive().optional(),
 	reasoning: ReasoningSettingsSchema.optional(),
+	modelOverrides: ProviderModelSettingsOverridesSchema.optional(),
+	mediaBudget: ProviderMediaBudgetSchema.optional(),
+	ollamaGeneration: OllamaGenerationSettingsSchema.optional(),
 	aws: AwsSettingsSchema.optional(),
 	gcp: GcpSettingsSchema.optional(),
 	azure: AzureSettingsSchema.optional(),
@@ -181,6 +246,8 @@ export type ProviderSettings = z.infer<typeof ProviderSettingsSchema>;
 
 export interface ToProviderConfigOptions {
 	includeKnownModels?: boolean;
+	/** Selected model used to resolve per-model provider settings overrides. */
+	modelId?: string;
 }
 
 export function parseSettings(input: unknown): ProviderSettings {
@@ -208,9 +275,23 @@ export function toProviderConfig(
 	const providerId = settings.provider as ProviderId;
 	const normalizedProviderId = normalizeProviderId(providerId);
 	const includeKnownModels = options.includeKnownModels !== false;
-	const unifiedReasoningLevel = settings.reasoning?.effort || "none";
+	const selectedModelId = options.modelId ?? settings.model;
+	const modelOverride = selectedModelId
+		? settings.modelOverrides?.[selectedModelId]
+		: undefined;
+	const effectiveReasoning = {
+		...(settings.reasoning ?? {}),
+		...(modelOverride?.reasoning ?? {}),
+	};
+	const unifiedReasoningLevel = effectiveReasoning.effort || "none";
 	const reasoningEffort =
 		unifiedReasoningLevel === "none" ? undefined : unifiedReasoningLevel;
+	const effectiveContextWindow =
+		modelOverride?.contextWindow ??
+		settings.contextWindow ??
+		(normalizedProviderId === "ollama"
+			? OLLAMA_DEFAULT_CONTEXT_WINDOW
+			: undefined);
 
 	const providerDefaults = OPENAI_COMPATIBLE_PROVIDERS[normalizedProviderId];
 	const generatedKnownModels =
@@ -244,6 +325,25 @@ export function toProviderConfig(
 				? generatedKnownModels
 				: undefined))
 		: undefined;
+	const ollamaGeneration: Llms.OllamaGenerationOptions | undefined = (() => {
+		if (normalizedProviderId !== "ollama" || !settings.ollamaGeneration) {
+			return undefined;
+		}
+
+		const { stop, ...generationOptions } = settings.ollamaGeneration;
+		const normalizedStop =
+			typeof stop === "string"
+				? stop
+						.split(/\r?\n/)
+						.map((value) => value.trim())
+						.filter(Boolean)
+				: stop;
+
+		return {
+			...generationOptions,
+			...(normalizedStop !== undefined ? { stop: normalizedStop } : {}),
+		};
+	})();
 
 	const config: ProviderConfig = {
 		providerId,
@@ -262,11 +362,15 @@ export function toProviderConfig(
 		baseUrl: resolvedBaseUrl,
 		headers: settings.headers,
 		timeoutMs: settings.timeout,
-		maxOutputTokens: settings.maxTokens,
-		maxInputTokens: settings.contextWindow,
-		thinking: settings.reasoning?.enabled,
+		maxOutputTokens: modelOverride?.maxTokens ?? settings.maxTokens,
+		mediaBudget: (normalizedProviderId === "ollama"
+			? { ...OLLAMA_DEFAULT_MEDIA_BUDGET, ...(settings.mediaBudget ?? {}) }
+			: settings.mediaBudget) as MediaBudgetOptions | undefined,
+		maxInputTokens: effectiveContextWindow,
+		ollamaGeneration,
+		thinking: effectiveReasoning.enabled,
 		reasoningEffort,
-		thinkingBudgetTokens: settings.reasoning?.budgetTokens,
+		thinkingBudgetTokens: effectiveReasoning.budgetTokens,
 		region: settings.region ?? settings.aws?.region ?? settings.gcp?.region,
 		apiLine: settings.apiLine,
 		useCrossRegionInference: settings.aws?.useCrossRegionInference,

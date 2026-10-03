@@ -5,6 +5,7 @@ import type {
 } from "../agent";
 import type { BasicLogger } from "../logging/logger";
 import type { ProviderCapability, ProviderConfigField } from "../rpc/runtime";
+import type { MediaBudgetOptions } from "./media";
 import type { ITelemetryService } from "../services/telemetry";
 import type {
 	ModelModalities,
@@ -193,6 +194,7 @@ export interface GatewayProviderSettings {
 	baseUrl?: string;
 	headers?: Record<string, string>;
 	timeoutMs?: number;
+	mediaBudget?: MediaBudgetOptions;
 	fetch?: typeof fetch;
 	options?: Record<string, unknown>;
 	metadata?: GatewayProviderMetadata;

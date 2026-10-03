@@ -243,7 +243,7 @@ function buildProviderConfig(
 		modelCatalog,
 	};
 	const providerConfig: ProviderConfig = {
-		...toProviderConfig(settings),
+		...toProviderConfig(settings, { modelId: config.modelId }),
 		...(sessionProviderConfig ?? {}),
 	};
 	if (resolvedHeaders) {
@@ -541,6 +541,11 @@ export async function prepareLocalRuntimeBootstrap(
 		modelCatalogDefaults,
 		defaultFetch,
 	);
+	if (baseConfig.providerId === "ollama") {
+		extensionContext.logger?.debug(
+			`[ollama] effective model=${baseConfig.modelId} context=${providerConfig.maxInputTokens ?? "default"} timeout=${providerConfig.timeoutMs ?? 300_000}ms maxOutput=${providerConfig.maxOutputTokens ?? "auto"} thinking=${providerConfig.thinking ?? "auto"} reasoning=${providerConfig.reasoningEffort ?? "auto"} budget=${providerConfig.thinkingBudgetTokens ?? "auto"}`,
+		);
+	}
 	const hooks = mergeAgentHooks([
 		baseConfig.hooks,
 		baseConfig.checkpoint?.enabled === true
@@ -557,6 +562,14 @@ export async function prepareLocalRuntimeBootstrap(
 	]);
 	const config: CoreSessionConfig = {
 		...baseConfig,
+		maxTokensPerTurn:
+			baseConfig.maxTokensPerTurn ?? providerConfig.maxOutputTokens,
+		temperature: baseConfig.temperature ?? providerConfig.temperature,
+		thinking: baseConfig.thinking ?? providerConfig.thinking,
+		reasoningEffort:
+			baseConfig.reasoningEffort ?? providerConfig.reasoningEffort,
+		thinkingBudgetTokens:
+			baseConfig.thinkingBudgetTokens ?? providerConfig.thinkingBudgetTokens,
 		providerConfig,
 		workspaceMetadata,
 		systemPrompt: resolveBootstrapSystemPrompt(

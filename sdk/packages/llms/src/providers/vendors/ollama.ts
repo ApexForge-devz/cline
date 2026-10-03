@@ -9,6 +9,10 @@
 // `options.num_ctx` per request; this boundary maps the provider-neutral
 // model `contextWindow` onto it.
 
+import {
+	OLLAMA_DEFAULT_MEDIA_BUDGET,
+	OLLAMA_DEFAULT_RESPONSE_START_TIMEOUT_MS,
+} from "@cline/shared";
 import type {
 	GatewayProviderContext,
 	GatewayResolvedProviderConfig,
@@ -25,7 +29,7 @@ import { wrapLanguageModel } from "ai";
 // drop the patch once an upstream release covers them.
 import { createOllama } from "ollama-ai-provider-v2";
 import { ensureFetch, resolveApiKey } from "../http";
-import { splitToolImagesMiddleware } from "../middleware/split-tool-images";
+import { createSplitToolImagesMiddleware } from "../middleware/split-tool-images";
 import type { ProviderFactoryResult } from "./types";
 
 /**
@@ -62,7 +66,7 @@ export function normalizeOllamaBaseUrl(
  * accepted-but-silent case, and 5 minutes matches the header-timeout default
  * other AI SDK-based agents use.
  */
-export const OLLAMA_DEFAULT_TIMEOUT_MS = 300_000;
+export const OLLAMA_DEFAULT_TIMEOUT_MS = OLLAMA_DEFAULT_RESPONSE_START_TIMEOUT_MS;
 
 /**
  * Read the configured request timeout (the legacy `requestTimeoutMs`
@@ -153,7 +157,9 @@ export async function createOllamaProviderModule(
 			language: (modelId) =>
 				wrapLanguageModel({
 					model: provider.chat(modelId),
-					middleware: splitToolImagesMiddleware,
+					middleware: createSplitToolImagesMiddleware(
+						config.mediaBudget ?? OLLAMA_DEFAULT_MEDIA_BUDGET,
+					),
 				}),
 		},
 	};

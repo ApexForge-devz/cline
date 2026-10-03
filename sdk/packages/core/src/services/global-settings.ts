@@ -56,7 +56,27 @@ export type GlobalCompactionMode = GlobalCompactionStrategy | "off";
 
 const GlobalPlanActModeSchema = z.enum(["plan", "act"]);
 
+const GlobalAgentLoopDetectionSchema = z.union([
+	z.literal(false),
+	z.object({
+		softThreshold: z.number().int().positive().optional(),
+		hardThreshold: z.number().int().positive().optional(),
+	}),
+]);
+
+const GlobalLocalAgentSettingsSchema = z
+	.object({
+		maxIterations: z.number().int().positive().optional().catch(undefined),
+		maxParallelToolCalls: z.number().int().positive().optional().catch(undefined),
+		maxTokensPerTurn: z.number().positive().optional().catch(undefined),
+		maxConsecutiveMistakes: z.number().int().positive().optional().catch(undefined),
+		loopDetection: GlobalAgentLoopDetectionSchema.optional().catch(undefined),
+		autonomyRule: z.string().max(2000).optional().catch(undefined),
+	})
+	.strip();
+
 export type GlobalPlanActMode = z.infer<typeof GlobalPlanActModeSchema>;
+export type GlobalLocalAgentSettings = z.infer<typeof GlobalLocalAgentSettingsSchema>;
 
 export const GlobalSettingsSchema = z
 	.object({
@@ -66,6 +86,7 @@ export const GlobalSettingsSchema = z
 		compactionEnabled: z.boolean().optional().catch(undefined),
 		planActMode: GlobalPlanActModeSchema.optional().catch(undefined),
 		toolAutoApprove: z.boolean().optional().catch(undefined),
+		localAgent: GlobalLocalAgentSettingsSchema.optional(),
 		tuiTheme: z.string().optional().catch(undefined),
 		disabledTools: GlobalSettingsStringListSchema.optional(),
 		tools: ModelToolSettingsSchema,
@@ -81,6 +102,7 @@ export const GlobalSettingsSchema = z
 			compactionEnabled?: boolean;
 			planActMode?: GlobalPlanActMode;
 			toolAutoApprove?: boolean;
+			localAgent?: GlobalLocalAgentSettings;
 			tuiTheme?: string;
 			disabledTools?: string[];
 			tools?: ModelToolSettings;
@@ -101,6 +123,13 @@ export const GlobalSettingsSchema = z
 		}
 		if (settings.toolAutoApprove !== undefined) {
 			normalized.toolAutoApprove = settings.toolAutoApprove;
+		}
+		if (settings.localAgent) {
+			const localAgent = GlobalLocalAgentSettingsSchema.parse({
+				...settings.localAgent,
+				autonomyRule: settings.localAgent.autonomyRule?.trim() || undefined,
+			});
+			if (Object.keys(localAgent).length > 0) normalized.localAgent = localAgent;
 		}
 		if (settings.tuiTheme?.trim()) {
 			normalized.tuiTheme = settings.tuiTheme.trim();
@@ -315,6 +344,30 @@ export function setPlanActModeGlobally(planActMode: GlobalPlanActMode): void {
 
 export function readToolAutoApproveGlobally(): boolean | undefined {
 	return readGlobalSettings().toolAutoApprove;
+}
+
+export function readLocalAgentSettingsGlobally(): GlobalLocalAgentSettings {
+	return readGlobalSettings().localAgent ?? {};
+}
+
+export type GlobalLocalAgentSettingsUpdate = {
+	[K in keyof GlobalLocalAgentSettings]?: GlobalLocalAgentSettings[K] | null;
+};
+
+export function setLocalAgentSettingsGlobally(
+	updates: GlobalLocalAgentSettingsUpdate,
+): GlobalLocalAgentSettings {
+	const current = readGlobalSettings();
+	const nextInput = {
+		...readLocalAgentSettingsGlobally(),
+	} as Record<string, unknown>;
+	for (const [key, value] of Object.entries(updates)) {
+		if (value === null || value === undefined) delete nextInput[key];
+		else nextInput[key] = value;
+	}
+	const next = GlobalLocalAgentSettingsSchema.parse(nextInput);
+	writeGlobalSettings({ ...current, localAgent: next });
+	return readLocalAgentSettingsGlobally();
 }
 
 /**

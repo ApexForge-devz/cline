@@ -110,5 +110,16 @@ Run Cline with local inference on your machine.
 ## Recommended Cline Settings for Local Inference
 
 - Enable **Use Compact Prompt**
+- Configure a context window appropriate for your hardware rather than automatically using the model maximum
+- Keep long sessions on automatic compaction unless you have a reason to disable it
+- Use the Ollama **Request Timeout** for cold loads and slow prompt/prefill operations
 - Keep tasks focused (smaller context = faster responses)
 - Start a new task when context gets too large
+
+## Moving from stock Cline
+
+This local-first configuration is designed to preserve the normal Cline provider model while making Ollama-specific behavior explicit. Existing Ollama model selections and connection settings remain valid; newly available controls are optional.
+
+Model capabilities are now derived from Ollama metadata rather than inferred from a specific model name. Context and timeout can be configured from the Desktop Ollama settings, and local vision uses a provider-aware media budget instead of inheriting a cloud transport limit.
+
+Advanced Ollama generation settings default to unset, which lets Ollama/model defaults continue to apply. Local-agent autonomy, compaction, and tool-approval settings are global defaults with session-specific overrides where supported.

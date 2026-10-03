@@ -58,6 +58,7 @@ export type {
 	Message,
 	MessageRole,
 	MessageWithMetadata,
+	OllamaGenerationOptions,
 	ProviderCapability,
 	ProviderConfig,
 	ProviderId,

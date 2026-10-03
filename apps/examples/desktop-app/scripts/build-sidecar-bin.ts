@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { $ } from "bun";
+import { prepareWindowsCrossCompileRuntime } from "./bun-cross-compile-runtime";
 import { telemetryDefineArgs } from "./telemetry-define-args";
 
 const resolveTargetTriple = async (): Promise<string> => {
@@ -73,6 +74,7 @@ const buildSidecar = async (
 		"--compile-exec-argv=--use-system-ca",
 	];
 	if (bunTarget) {
+		await prepareWindowsCrossCompileRuntime(bunTarget);
 		await $`bun build ${entrypoint} --compile --target=${bunTarget} ${runtimeIsolationArgs} ${optimizationArgs} ${defines} --outfile ${outfile}`;
 	} else {
 		await $`bun build ${entrypoint} --compile ${runtimeIsolationArgs} ${optimizationArgs} ${defines} --outfile ${outfile}`;
@@ -111,11 +113,9 @@ const compressRemoteHelper = async (outfile: string): Promise<void> => {
 // in the bundle fails notarization. Mac remotes are served from a macOS
 // desktop by its own signed sidecar instead (sidecar/remote-helper.ts).
 //
-// On a Windows host, Bun fails to extract the downloaded Linux runtime these
-// cross-compiles need ("Failed to extract executable for 'bun-linux-x64-…'").
-// Bun skips the download when `$BUN_INSTALL_CACHE_DIR/bun-<target>-v<version>`
-// already exists, so seed those two files from the @oven/bun-<target> npm
-// packages first; desktop-publish.yml does exactly that in its Windows job.
+// On a Windows host, Bun 1.3.13 can fail while extracting the downloaded
+// Linux runtime needed by these cross-compiles. The build-sidecar path prepares
+// the validated official runtime in Bun's normal cache before invoking Bun.
 const buildRemoteHelpers = async (): Promise<void> => {
 	for (const targetTriple of [
 		"x86_64-unknown-linux-gnu",

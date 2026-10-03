@@ -7,6 +7,33 @@ import {
 } from "./ai-sdk-format";
 import { IMAGE_UNSUPPORTED_PLACEHOLDER } from "./media";
 
+
+
+describe("provider-aware local media budget", () => {
+	it("allows a 4 MiB image when the local Ollama budget permits it", () => {
+		const decodedBytes = 4 * 1024 * 1024;
+		const base64 = "A".repeat(Math.ceil(decodedBytes / 3) * 4);
+		const messages = formatMessagesForAiSdk(undefined, [
+			{ role: "user", content: [{ type: "image", image: base64, mediaType: "image/jpeg" }] },
+		], {
+			supportedInputModalities: ["text", "image"],
+			mediaBudget: {
+				maxImageEncodedBytes: 12 * 1024 * 1024,
+				maxImageDecodedBytes: 8 * 1024 * 1024,
+				maxTotalMediaBytes: 24 * 1024 * 1024,
+			},
+		});
+		expect(JSON.stringify(messages)).not.toContain("media omitted");
+	});
+
+	it("keeps a text placeholder when a text-only model receives image history", () => {
+		const messages = formatMessagesForAiSdk(undefined, [
+			{ role: "user", content: [{ type: "image", image: "AAAA", mediaType: "image/jpeg" }] },
+		], { supportedInputModalities: ["text"] });
+		expect(JSON.stringify(messages)).toContain("cannot view images");
+	});
+});
+
 describe("formatMessagesForAiSdk", () => {
 	const imageData = (byteLength: number, fill = 1) =>
 		Buffer.alloc(byteLength, fill).toString("base64");

@@ -110,6 +110,7 @@ export {
 	emptyWorkspaceManifest,
 	FEATURE_FLAGS,
 	FeatureFlag,
+	OLLAMA_DEFAULT_CONTEXT_WINDOW,
 	FeatureFlagDefaultValue,
 	formatDisplayUserInput,
 	noopBasicLogger,
@@ -569,6 +570,8 @@ export {
 export type {
 	GlobalCompactionMode,
 	GlobalCompactionStrategy,
+	GlobalLocalAgentSettings,
+	GlobalLocalAgentSettingsUpdate,
 	GlobalPlanActMode,
 	GlobalSettings,
 } from "./services/global-settings";
@@ -586,6 +589,7 @@ export {
 	readCompactionModeGlobally,
 	readCompactionStrategyGlobally,
 	readGlobalSettings,
+	readLocalAgentSettingsGlobally,
 	readPlanActModeGlobally,
 	readToolAutoApproveGlobally,
 	readTuiThemeGlobally,
@@ -600,6 +604,7 @@ export {
 	setDisabledPlugin,
 	setDisabledTools,
 	setModelToolEnabledGlobally,
+	setLocalAgentSettingsGlobally,
 	setPlanActModeGlobally,
 	setTelemetryOptOutGlobally,
 	setToolAutoApproveGlobally,
@@ -730,6 +735,11 @@ export {
 	type ProviderConfigFields,
 } from "./services/providers/provider-config-fields";
 export { isProviderSettingsUsable } from "./services/providers/provider-readiness";
+export {
+	getOllamaRuntimeDiagnostics,
+	type OllamaRuntimeDiagnostics,
+	type OllamaRuntimeModelDiagnostics,
+} from "./services/providers/ollama-runtime-diagnostics";
 export * from "./services/session-import";
 export {
 	type MigrateLegacyProviderSettingsOptions,

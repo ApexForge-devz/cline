@@ -184,6 +184,64 @@ describe("desktop settings commands", () => {
 		expect(events).toEqual([]);
 	});
 
+	it("persists compaction mode and validates its values", async () => {
+		const { ctx } = createContext();
+
+		await expect(
+			handleCommand(ctx, "set_compaction_mode", { mode: "basic" }),
+		).resolves.toMatchObject({
+			compactionEnabled: true,
+			compactionStrategy: "basic",
+		});
+
+		await expect(
+			handleCommand(ctx, "set_compaction_mode", { mode: "off" }),
+		).resolves.toMatchObject({
+			compactionEnabled: false,
+			compactionStrategy: "basic",
+		});
+
+		await expect(
+			handleCommand(ctx, "set_compaction_mode", { mode: "invalid" }),
+		).rejects.toThrow("mode must be one of: off, basic, agentic");
+	});
+
+	it("persists local agent defaults and validates tool approval", async () => {
+		const { ctx } = createContext();
+
+		await expect(
+			handleCommand(ctx, "set_local_agent_settings", {
+				settings: {
+					maxIterations: 24,
+					maxParallelToolCalls: 2,
+					maxTokensPerTurn: 4096,
+					maxConsecutiveMistakes: 4,
+					loopDetection: { softThreshold: 3, hardThreshold: 5 },
+					autonomyRule: "Inspect, act, verify.",
+				},
+			}),
+		).resolves.toMatchObject({
+			localAgent: {
+				maxIterations: 24,
+				maxParallelToolCalls: 2,
+				maxTokensPerTurn: 4096,
+				maxConsecutiveMistakes: 4,
+			},
+		});
+
+		await expect(
+			handleCommand(ctx, "set_tool_auto_approve", {
+				tool_auto_approve: false,
+			}),
+		).resolves.toMatchObject({ toolAutoApprove: false });
+
+		await expect(
+			handleCommand(ctx, "set_tool_auto_approve", {
+				tool_auto_approve: "yes",
+			}),
+		).rejects.toThrow("tool_auto_approve must be a boolean");
+	});
+
 	it.each([
 		true,
 		false,

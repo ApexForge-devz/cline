@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import {
+	OLLAMA_DEFAULT_CONTEXT_WINDOW,
 	buildConnectionUpdate,
 	buildWorkspaceMetadata,
 	type ClineCore,
@@ -16,6 +17,7 @@ import {
 	ProviderSettingsManager,
 	projectSessionCompactionState,
 	RuntimeOAuthTokenManager,
+	readCompactionModeGlobally,
 	readGlobalSettings,
 	readSessionCheckpointHistory,
 	resolveProviderApiKeyFromSettings,
@@ -77,6 +79,9 @@ type SessionConnectionUpdate = Parameters<
 >[1];
 
 type WorkspaceMetadataLoader = (cwd: string) => Promise<string>;
+
+const DEFAULT_LOCAL_AUTONOMY_RULE =
+	"For well-specified tasks, inspect, decide, act, and verify without routine confirmation. Ask only when blocked or a consequential choice cannot be inferred safely.";
 type WorkspaceMetadataCacheEntry = {
 	createdAt: number;
 	promise: Promise<string>;
@@ -138,6 +143,19 @@ const FALLBACK_MANUAL_COMPACTION_MAX_INPUT_TOKENS = 64_000;
 const COMPACT_WHILE_RUNNING_MESSAGE =
 	"Cannot compact while a response is in progress. Try again once the current turn finishes.";
 
+export function resolveDesktopCompactionConfig(
+	mode: "off" | "basic" | "agentic" | undefined = readCompactionModeGlobally(),
+) {
+	if (mode === "off") return { enabled: false } as const;
+	return { enabled: true, strategy: mode ?? "agentic" } as const;
+}
+
+export function resolveDesktopManualCompactionConfig(
+	mode: "off" | "basic" | "agentic" | undefined = readCompactionModeGlobally(),
+) {
+	return { enabled: true, strategy: mode === "basic" ? "basic" : "agentic" } as const;
+}
+
 /**
  * Manual `/compact`, mirroring the CLI's local command: summarizes the full
  * canonical transcript and stores it as the session's compaction sidecar, so
@@ -176,7 +194,7 @@ async function compactSession(
 			baseUrl,
 			headers,
 			providerConfig,
-			compaction: { enabled: true },
+			compaction: resolveDesktopManualCompactionConfig(),
 			logger: ctx.logger,
 			telemetry: ctx.telemetry,
 			sessionId,
@@ -196,9 +214,14 @@ async function compactSession(
 		model: {
 			id: modelId,
 			provider: providerId,
-			info: getGeneratedModelsForRuntimeProvider(providerId)[modelId] ?? {
-				id: modelId,
-				maxInputTokens: FALLBACK_MANUAL_COMPACTION_MAX_INPUT_TOKENS,
+			info: {
+				...(getGeneratedModelsForRuntimeProvider(providerId)[modelId] ?? {
+					id: modelId,
+					maxInputTokens: FALLBACK_MANUAL_COMPACTION_MAX_INPUT_TOKENS,
+				}),
+				...(typeof providerConfig?.maxInputTokens === "number"
+					? { maxInputTokens: providerConfig.maxInputTokens }
+					: {}),
 			},
 		},
 	});
@@ -697,19 +720,71 @@ function buildCoreSessionConfig(
 			: readPositiveInteger(
 					config.thinkingBudgetTokens ?? config.thinking_budget_tokens,
 				);
+	const providerId = String(config.provider ?? config.providerId ?? "").trim();
+	const modelId = String(config.model ?? config.modelId ?? "").trim();
+	const globalLocalAgent =
+		providerId === "ollama" ? readGlobalSettings().localAgent ?? {} : {};
+	const incomingProviderConfig =
+		config.providerConfig &&
+		typeof config.providerConfig === "object" &&
+		!Array.isArray(config.providerConfig)
+			? { ...(config.providerConfig as JsonRecord) }
+			: {};
+	const providerConfig = {
+		...incomingProviderConfig,
+		providerId,
+		modelId,
+		...(providerId === "ollama" &&
+			(readPositiveInteger(incomingProviderConfig.maxInputTokens) ?? 0) <= 0
+			? { maxInputTokens: OLLAMA_DEFAULT_CONTEXT_WINDOW }
+			: {}),
+	};
+	const configuredExecution =
+		config.execution &&
+		typeof config.execution === "object" &&
+		!Array.isArray(config.execution)
+			? (config.execution as JsonRecord)
+			: {};
+	const maxConsecutiveMistakes = readPositiveInteger(
+		config.maxConsecutiveMistakes ??
+			configuredExecution.maxConsecutiveMistakes ??
+			globalLocalAgent.maxConsecutiveMistakes,
+	);
+	const loopDetection =
+		config.loopDetection ??
+		configuredExecution.loopDetection ??
+		globalLocalAgent.loopDetection;
+	const execution = {
+		...configuredExecution,
+		...(maxConsecutiveMistakes !== undefined
+			? { maxConsecutiveMistakes }
+			: {}),
+		...(loopDetection !== undefined ? { loopDetection } : {}),
+	};
 	return {
 		sessionId: config.sessionId ?? config.session_id,
-		providerId: config.provider ?? config.providerId ?? "",
-		modelId: config.model ?? config.modelId ?? "",
+		providerId,
+		modelId,
 		mode: resolveDesktopSessionMode(config),
 		apiKey: config.apiKey ?? config.api_key ?? "",
 		baseUrl: config.baseUrl,
 		headers: config.headers,
-		providerConfig: config.providerConfig,
+		providerConfig,
 		...(workspaceRoot ? { workspaceRoot } : {}),
 		...(cwd ? { cwd } : {}),
 		systemPrompt: config.systemPrompt ?? config.system_prompt ?? "",
-		maxIterations: config.maxIterations ?? config.max_iterations,
+		maxIterations:
+			config.maxIterations ??
+			config.max_iterations ??
+			globalLocalAgent.maxIterations,
+		maxParallelToolCalls:
+			config.maxParallelToolCalls ??
+			config.max_parallel_tool_calls ??
+			globalLocalAgent.maxParallelToolCalls,
+		maxTokensPerTurn:
+			config.maxTokensPerTurn ??
+			config.max_tokens_per_turn ??
+			globalLocalAgent.maxTokensPerTurn,
 		enableTools: config.enableTools ?? config.enable_tools ?? true,
 		...(thinking !== undefined ? { thinking } : {}),
 		...(reasoningEffort ? { reasoningEffort } : {}),
@@ -720,9 +795,8 @@ function buildCoreSessionConfig(
 		missionLogIntervalMs:
 			config.missionTimeIntervalMs ?? config.missionLogIntervalMs,
 		checkpoint: { enabled: true },
-		// Core auto-compaction is opt-in; without this the 90% trigger never
-		// runs and long desktop sessions overflow the context window.
-		compaction: { enabled: true },
+		execution,
+		compaction: resolveDesktopCompactionConfig(),
 		sessions: config.sessions,
 		initialMessages: config.initialMessages,
 		extensionContext: createDesktopExtensionContext(telemetryUser),
@@ -868,12 +942,17 @@ async function resolveSystemPrompt(config: JsonRecord): Promise<string> {
 		typeof config.rules === "string" && config.rules.trim().length > 0
 			? config.rules
 			: undefined;
+	const localAutonomyRule =
+		providerId === "ollama"
+			? readGlobalSettings().localAgent?.autonomyRule?.trim() ||
+				DEFAULT_LOCAL_AUTONOMY_RULE
+			: undefined;
 	return buildClineSystemPrompt({
 		ide: "Terminal Shell",
 		workspaceRoot: cwd,
 		workspaceName: basename(cwd),
 		metadata,
-		rules: inlineRules,
+		rules: [inlineRules, localAutonomyRule].filter(Boolean).join("\n\n") || undefined,
 		mode,
 		providerId: providerId || undefined,
 		overridePrompt:
@@ -890,10 +969,21 @@ async function resolveSystemPrompt(config: JsonRecord): Promise<string> {
 
 function resolveToolPolicies(
 	config: JsonRecord,
-): { "*": { autoApprove: boolean } } | undefined {
+): Record<string, { enabled?: boolean; autoApprove?: boolean }> | undefined {
+	const configured =
+		config.toolPolicies &&
+		typeof config.toolPolicies === "object" &&
+		!Array.isArray(config.toolPolicies)
+			? (config.toolPolicies as Record<string, { enabled?: boolean; autoApprove?: boolean }>)
+			: undefined;
 	return {
+		...(configured ?? {}),
 		"*": {
-			autoApprove: config.autoApproveTools !== false,
+			autoApprove:
+				typeof config.autoApproveTools === "boolean"
+					? config.autoApproveTools
+					: (readGlobalSettings().toolAutoApprove ?? true),
+			...(configured?.["*"] ?? {}),
 		},
 	};
 }

@@ -20,6 +20,8 @@ import {
 	hasProviderChanged,
 	mergeSessionConfig,
 	prewarmWorkspaceMetadata,
+	resolveDesktopCompactionConfig,
+	resolveDesktopManualCompactionConfig,
 	resolveDesktopSessionMode,
 	rewriteDesktopTeamPrompt,
 	shouldUpdateSessionConnection,
@@ -46,6 +48,28 @@ vi.mock("@cline/core", async (importOriginal) => {
 		...actual,
 		createContextCompactionPrepareTurn: createContextCompactionPrepareTurnMock,
 	};
+});
+
+describe("resolveDesktopCompactionConfig", () => {
+	it.each([
+		[undefined, { enabled: true, strategy: "agentic" }],
+		["agentic", { enabled: true, strategy: "agentic" }],
+		["basic", { enabled: true, strategy: "basic" }],
+		["off", { enabled: false }],
+	] as const)("resolves %s", (mode, expected) => {
+		expect(resolveDesktopCompactionConfig(mode)).toEqual(expected);
+	});
+
+	it("keeps manual compaction available when automatic compaction is off", () => {
+		expect(resolveDesktopManualCompactionConfig("off")).toEqual({
+			enabled: true,
+			strategy: "agentic",
+		});
+		expect(resolveDesktopManualCompactionConfig("basic")).toEqual({
+			enabled: true,
+			strategy: "basic",
+		});
+	});
 });
 
 describe("resolveDesktopSessionMode", () => {
@@ -334,6 +358,8 @@ describe("hasProviderChanged", () => {
 		const update = {
 			providerId: "openai-codex",
 			modelId: "gpt-5.3-codex",
+			maxParallelToolCalls: 2,
+			toolPolicies: { "run_commands": { autoApprove: true } },
 		};
 
 		expect(hasProviderChanged(current, update)).toBe(true);
@@ -342,6 +368,8 @@ describe("hasProviderChanged", () => {
 			providerId: "openai-codex",
 			model: "gpt-5.3-codex",
 			modelId: "gpt-5.3-codex",
+			maxParallelToolCalls: 2,
+			toolPolicies: { "run_commands": { autoApprove: true } },
 		});
 	});
 });

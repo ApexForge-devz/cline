@@ -19,6 +19,7 @@ import {
 	setDisabledAgentPlugin,
 	setDisabledPlugin,
 	setDisabledTools,
+	setLocalAgentSettingsGlobally,
 	setModelToolEnabledGlobally,
 	setPlanActModeGlobally,
 	setTelemetryOptOutGlobally,
@@ -172,6 +173,46 @@ describe("global-settings", () => {
 			setDisabledAgentPlugin("portable-review", false);
 			expect(isAgentPluginDisabledGlobally("portable-review")).toBe(false);
 			expect(readGlobalSettings().disabledAgentPlugins).toBeUndefined();
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("stores and clears local agent defaults without changing unrelated global settings", async () => {
+		const root = await mkdtemp(join(tmpdir(), "core-global-settings-"));
+		try {
+			process.env.CLINE_GLOBAL_SETTINGS_PATH = join(root, "global-settings.json");
+
+			setToolAutoApproveGlobally(false);
+			setLocalAgentSettingsGlobally({
+				maxIterations: 12,
+				maxParallelToolCalls: 2,
+				maxTokensPerTurn: 4096,
+				maxConsecutiveMistakes: 7,
+				loopDetection: { softThreshold: 3, hardThreshold: 5 },
+				autonomyRule: "Inspect, act, verify.",
+			});
+
+			expect(readGlobalSettings()).toMatchObject({
+				toolAutoApprove: false,
+				localAgent: {
+					maxIterations: 12,
+					maxParallelToolCalls: 2,
+					maxTokensPerTurn: 4096,
+					maxConsecutiveMistakes: 7,
+					loopDetection: { softThreshold: 3, hardThreshold: 5 },
+					autonomyRule: "Inspect, act, verify.",
+				},
+			});
+
+			setLocalAgentSettingsGlobally({ maxIterations: null, loopDetection: null });
+			expect(readGlobalSettings().localAgent).toEqual({
+				maxParallelToolCalls: 2,
+				maxTokensPerTurn: 4096,
+				maxConsecutiveMistakes: 7,
+				autonomyRule: "Inspect, act, verify.",
+			});
+			expect(readGlobalSettings().toolAutoApprove).toBe(false);
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}

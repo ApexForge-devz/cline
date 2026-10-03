@@ -9,7 +9,9 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
+import { Textarea } from "@/components/ui/textarea";
 import {
 	DEFAULT_APP_FONT_SIZE,
 	isAppFontSize,
@@ -86,10 +88,27 @@ export {
 	type SettingsSection,
 } from "./sections";
 
+type LocalAgentSettings = {
+	maxIterations?: number;
+	maxParallelToolCalls?: number;
+	maxTokensPerTurn?: number;
+	maxConsecutiveMistakes?: number;
+	loopDetection?: false | { softThreshold?: number; hardThreshold?: number };
+	autonomyRule?: string;
+};
+
 type GlobalSettingsResponse = {
 	telemetryOptOut: boolean;
 	autoUpdateEnabled: boolean;
+	compactionEnabled?: boolean;
+	compactionStrategy?: "basic" | "agentic";
+	toolAutoApprove?: boolean;
+	localAgent?: LocalAgentSettings;
+	compactionEnabled?: boolean;
+	compactionStrategy?: "basic" | "agentic";
 };
+
+type CompactionMode = "off" | "basic" | "agentic";
 
 const PROVIDER_CATALOG_CACHE_TTL_MS = 60_000;
 
@@ -256,6 +275,8 @@ export function SettingsView({
 				apiKey?: string;
 				baseUrl?: string;
 				configValues?: ProviderSettingsUpdate["configValues"];
+				headers?: ProviderSettingsUpdate["headers"];
+				modelOverrides?: ProviderSettingsUpdate["modelOverrides"];
 			},
 		): Promise<boolean> => {
 			try {
@@ -264,9 +285,18 @@ export function SettingsView({
 					enabled: updates.enabled,
 					api_key: updates.apiKey,
 					base_url: updates.baseUrl,
-					settings: updates.configValues
-						? toSettingsPatch(updates.configValues)
-						: undefined,
+					settings:
+						updates.configValues || updates.headers || updates.modelOverrides
+							? {
+								...toSettingsPatch(updates.configValues ?? {}),
+								...(updates.headers !== undefined
+									? { headers: updates.headers }
+									: {}),
+								...(updates.modelOverrides !== undefined
+									? { modelOverrides: updates.modelOverrides }
+									: {}),
+							}
+							: undefined,
 				});
 				// Pick up sidecar-computed readiness (`configured`) for the
 				// just-saved settings so the Configured badge and count update
@@ -367,6 +397,8 @@ export function SettingsView({
 				apiKey: updates.apiKey,
 				baseUrl: updates.baseUrl,
 				configValues: updates.configValues,
+				headers: updates.headers,
+				modelOverrides: updates.modelOverrides,
 			});
 		},
 		[persistProviderSettings, setProvidersWithCache],
@@ -708,6 +740,11 @@ function GeneralSettingsContent({
 	const [autoUpdateLoading, setAutoUpdateLoading] = useState(true);
 	const [autoUpdateSaving, setAutoUpdateSaving] = useState(false);
 	const [autoUpdateError, setAutoUpdateError] = useState<string | null>(null);
+	const [toolAutoApprove, setToolAutoApprove] = useState(true);
+	const [compactionMode, setCompactionMode] = useState<CompactionMode>("agentic");
+	const [localAgent, setLocalAgent] = useState<LocalAgentSettings>({});
+	const [agentSettingsSaving, setAgentSettingsSaving] = useState(false);
+	const [agentSettingsError, setAgentSettingsError] = useState<string | null>(null);
 	const [cloudSessionsEnabled, setCloudSessionsEnabled] = useState(false);
 	const [cloudSessionsLoading, setCloudSessionsLoading] = useState(true);
 	const [cloudSessionsSaving, setCloudSessionsSaving] = useState(false);
@@ -753,6 +790,13 @@ function GeneralSettingsContent({
 					);
 					setTelemetryOptOut(settings.telemetryOptOut);
 					setAutoUpdateEnabled(settings.autoUpdateEnabled);
+					setToolAutoApprove(settings.toolAutoApprove ?? true);
+					setCompactionMode(
+						settings.compactionEnabled === false
+							? "off"
+							: settings.compactionStrategy ?? "agentic",
+					);
+					setLocalAgent(settings.localAgent ?? {});
 				} catch (error) {
 					const message =
 						error instanceof Error ? error.message : String(error);
@@ -827,6 +871,69 @@ function GeneralSettingsContent({
 			setAutoUpdateError(message);
 		} finally {
 			setAutoUpdateSaving(false);
+		}
+	};
+
+	const updateCompactionMode = async (nextValue: CompactionMode) => {
+		const previousValue = compactionMode;
+		setCompactionMode(nextValue);
+		setAgentSettingsSaving(true);
+		setAgentSettingsError(null);
+		try {
+			const settings = await desktopClient.invoke<GlobalSettingsResponse>(
+				"set_compaction_mode",
+				{ mode: nextValue },
+			);
+			setCompactionMode(
+				settings.compactionEnabled === false
+					? "off"
+					: settings.compactionStrategy ?? "agentic",
+			);
+		} catch (error) {
+			setCompactionMode(previousValue);
+			setAgentSettingsError(error instanceof Error ? error.message : String(error));
+		} finally {
+			setAgentSettingsSaving(false);
+		}
+	};
+
+	const updateToolAutoApprove = async (nextValue: boolean) => {
+		const previousValue = toolAutoApprove;
+		setToolAutoApprove(nextValue);
+		setAgentSettingsSaving(true);
+		setAgentSettingsError(null);
+		try {
+			const settings = await desktopClient.invoke<GlobalSettingsResponse>(
+				"set_tool_auto_approve",
+				{ tool_auto_approve: nextValue },
+			);
+			setToolAutoApprove(settings.toolAutoApprove ?? nextValue);
+		} catch (error) {
+			setToolAutoApprove(previousValue);
+			setAgentSettingsError(error instanceof Error ? error.message : String(error));
+		} finally {
+			setAgentSettingsSaving(false);
+		}
+	};
+
+
+	const updateLocalAgent = async (updates: Record<string, unknown>) => {
+		const previous = localAgent;
+		const next = { ...localAgent, ...updates } as LocalAgentSettings;
+		setLocalAgent(next);
+		setAgentSettingsSaving(true);
+		setAgentSettingsError(null);
+		try {
+			const settings = await desktopClient.invoke<GlobalSettingsResponse>(
+				"set_local_agent_settings",
+				{ settings: updates },
+			);
+			setLocalAgent(settings.localAgent ?? {});
+		} catch (error) {
+			setLocalAgent(previous);
+			setAgentSettingsError(error instanceof Error ? error.message : String(error));
+		} finally {
+			setAgentSettingsSaving(false);
 		}
 	};
 
@@ -1100,6 +1207,138 @@ function GeneralSettingsContent({
 						/>
 					</div>
 				) : null}
+				<div className="border-b py-5">
+					<div className="mb-4 flex flex-col gap-1">
+						<p className="text-base font-semibold text-foreground">
+							Context compaction
+						</p>
+						<p className="text-sm text-muted-foreground">
+							Keep long local sessions within the effective context window. Automatic compaction targets 90% of the usable input budget.
+						</p>
+					</div>
+					<div className="flex items-center justify-between gap-5 max-[720px]:flex-col max-[720px]:items-stretch">
+						<div className="flex flex-col gap-1">
+							<label className="text-sm font-medium text-foreground" htmlFor="compaction-mode">Mode</label>
+							<p className="text-xs text-muted-foreground">Agentic uses the model for summaries; basic uses deterministic compaction.</p>
+						</div>
+						<select
+							aria-label="Context compaction mode"
+							className="h-9 rounded border border-border bg-background px-3 text-sm text-foreground"
+							id="compaction-mode"
+							onChange={(event) => void updateCompactionMode(event.target.value as CompactionMode)}
+							value={compactionMode}
+						>
+							<option value="off">Off</option>
+							<option value="basic">Basic</option>
+							<option value="agentic">Agentic</option>
+						</select>
+					</div>
+				</div>
+				<div className="border-b py-5">
+					<div className="mb-4 flex flex-col gap-1">
+						<p className="text-base font-semibold text-foreground">
+							Local agent defaults
+						</p>
+						<p className="text-sm text-muted-foreground">
+							Defaults for local Ollama sessions. Session-specific values take precedence.
+						</p>
+					</div>
+					<div className="mb-4 flex items-center justify-between gap-5">
+						<div className="flex flex-col gap-1">
+							<p className="text-sm font-medium text-foreground">Auto-approve tools</p>
+							<p className="text-xs text-muted-foreground">
+								Use the existing tool policy and skip routine approval prompts for trusted local work.
+							</p>
+						</div>
+						<Switch
+							aria-label="Auto-approve tools globally"
+							checked={toolAutoApprove}
+							disabled={agentSettingsSaving}
+							onCheckedChange={(checked) => void updateToolAutoApprove(checked)}
+						/>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						{([
+							["maxIterations", "Max iterations", "Hard cap for one agent run.", 1],
+							["maxParallelToolCalls", "Parallel tool calls", "Maximum concurrent tool executions.", 1],
+							["maxTokensPerTurn", "Max output tokens / turn", "Leave unset to let the provider/model choose.", 1],
+							["maxConsecutiveMistakes", "Max consecutive mistakes", "Pause/recover after repeated failed turns.", 1],
+						] as const).map(([key, label, description, min]) => (
+							<div className="flex flex-col gap-1.5" key={key}>
+								<label className="text-sm font-medium text-foreground" htmlFor={`agent-${key}`}>{label}</label>
+								<Input
+									key={`agent-${key}-${localAgent[key] ?? ""}`}
+									defaultValue={localAgent[key] ?? ""}
+									id={`agent-${key}`}
+									min={min}
+									onBlur={(event) => {
+										const value = event.target.value.trim();
+										void updateLocalAgent({ [key]: value ? Number(value) : null });
+									}}
+									step={1}
+									type="number"
+								/>
+								<p className="text-xs text-muted-foreground">{description}</p>
+							</div>
+						))}
+					</div>
+					<div className="mt-4 rounded-lg border p-3">
+						<div className="flex items-center justify-between gap-5">
+							<div className="flex flex-col gap-1">
+								<p className="text-sm font-medium text-foreground">Loop detection</p>
+								<p className="text-xs text-muted-foreground">Detect repeated identical tool calls before they become an endless loop.</p>
+							</div>
+							<Switch
+								aria-label="Loop detection"
+								checked={localAgent.loopDetection !== false && localAgent.loopDetection !== undefined}
+								disabled={agentSettingsSaving}
+								onCheckedChange={(checked) =>
+									void updateLocalAgent(checked ? { loopDetection: { softThreshold: 3, hardThreshold: 5 } } : { loopDetection: null })
+								}
+							/>
+						</div>
+						{localAgent.loopDetection && typeof localAgent.loopDetection === "object" ? (
+							<div className="mt-3 grid gap-4 sm:grid-cols-2">
+								{([["softThreshold", "Soft threshold"], ["hardThreshold", "Hard threshold"]] as const).map(([key, label]) => (
+									<div className="flex flex-col gap-1.5" key={key}>
+										<label className="text-xs font-medium text-foreground" htmlFor={`loop-${key}`}>{label}</label>
+										<Input
+											key={`loop-${key}-${localAgent.loopDetection[key] ?? ""}`}
+											defaultValue={localAgent.loopDetection[key] ?? ""}
+											id={`loop-${key}`}
+											min={1}
+											onBlur={(event) => {
+												const value = event.target.value.trim();
+												const loopDetection = {
+													...localAgent.loopDetection,
+													[key]: value ? Number(value) : null,
+												};
+												void updateLocalAgent({ loopDetection });
+											}}
+											type="number"
+										/>
+									</div>
+								))}
+							</div>
+						) : null}
+					</div>
+					<div className="mt-4 flex flex-col gap-1.5">
+						<label className="text-sm font-medium text-foreground" htmlFor="local-autonomy-rule">Local autonomy rule</label>
+						<Textarea
+							key={`local-autonomy-rule-${localAgent.autonomyRule ?? ""}`}
+							defaultValue={localAgent.autonomyRule ?? ""}
+							id="local-autonomy-rule"
+							onBlur={(event) => void updateLocalAgent({ autonomyRule: event.target.value.trim() || null })}
+							placeholder="Optional. The local Ollama default is concise inspect → decide → act → verify guidance."
+						/>
+						<p className="text-xs text-muted-foreground">
+							Applied only to Ollama sessions. Keep this concise because it becomes part of the model context.
+						</p>
+					</div>
+					{agentSettingsError ? (
+						<p className="mt-3 text-xs text-destructive" role="alert">Failed to update agent settings: {agentSettingsError}</p>
+					) : null}
+				</div>
 				<div className="flex py-4 items-center justify-between gap-5 border-b max-[720px]:flex-col max-[720px]:items-stretch max-[720px]:py-4">
 					<div className="flex flex-col gap-1">
 						<p className="text-base font-semibold text-foreground">Telemetry</p>

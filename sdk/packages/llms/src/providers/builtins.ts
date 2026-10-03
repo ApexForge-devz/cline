@@ -98,7 +98,7 @@ const OPENROUTER_STICKY_SESSION_METADATA: GatewayProviderMetadata = {
  * which cannot fit Cline's agentic prompts. Single source of truth — the
  * vendor, the VS Code session factory, and the settings UI all import this.
  */
-export const OLLAMA_DEFAULT_CONTEXT_WINDOW = 32768;
+export { OLLAMA_DEFAULT_CONTEXT_WINDOW } from "@cline/shared";
 
 export type {
 	BuiltinSpec,
@@ -264,6 +264,147 @@ const QWEN_CONFIG_FIELDS: readonly ProviderConfigField[] = [
 			{ label: "International", value: "international" },
 			{ label: "China", value: "china" },
 		],
+	},
+];
+
+const OLLAMA_CONFIG_FIELDS: readonly ProviderConfigField[] = [
+	API_KEY_FIELD,
+	BASE_URL_FIELD,
+	{
+		path: "timeout",
+		label: "Request Timeout (ms)",
+		type: "number",
+		placeholder: "300000",
+		description: "Response-start timeout. 300000 ms = 5 minutes.",
+	},
+	{
+		path: "contextWindow",
+		label: "Context Window (tokens)",
+		type: "number",
+		placeholder: "32768",
+		description: "Provider default. Per-model overrides can be set below.",
+	},
+	{
+		path: "maxTokens",
+		label: "Max Output Tokens",
+		type: "number",
+		placeholder: "Auto",
+		description: "Leave blank to use the runtime/model default.",
+	},
+	{
+		path: "reasoning.enabled",
+		label: "Thinking",
+		type: "select",
+		description: "Not set means Auto; Ollama/model metadata remains authoritative.",
+		options: [
+			{ label: "Enabled", value: true },
+			{ label: "Disabled", value: false },
+		],
+	},
+	{
+		path: "reasoning.effort",
+		label: "Reasoning Effort",
+		type: "select",
+		description: "Not set means Auto.",
+		options: [
+			{ label: "Minimal", value: "minimal" },
+			{ label: "Low", value: "low" },
+			{ label: "Medium", value: "medium" },
+			{ label: "High", value: "high" },
+			{ label: "XHigh", value: "xhigh" },
+			{ label: "Max", value: "max" },
+		],
+	},
+	{
+		path: "reasoning.budgetTokens",
+		label: "Thinking Budget (tokens)",
+		type: "number",
+		placeholder: "Auto",
+		description: "Leave blank to use the model/provider default.",
+	},
+	{
+		path: "ollamaGeneration.temperature",
+		label: "Temperature",
+		type: "number",
+		placeholder: "Auto",
+		description: "Ollama-native sampling temperature. Leave blank for the runtime/model default.",
+	},
+	{
+		path: "ollamaGeneration.topP",
+		label: "Top-P",
+		type: "number",
+		placeholder: "Auto",
+		description: "Ollama-native nucleus sampling threshold (0–1).",
+	},
+	{
+		path: "ollamaGeneration.topK",
+		label: "Top-K",
+		type: "number",
+		placeholder: "Auto",
+		description: "Ollama-native candidate-token limit.",
+	},
+	{
+		path: "ollamaGeneration.minP",
+		label: "Min-P",
+		type: "number",
+		placeholder: "Auto",
+		description: "Ollama-native minimum relative probability (0–1).",
+	},
+	{
+		path: "ollamaGeneration.repeatPenalty",
+		label: "Repeat Penalty",
+		type: "number",
+		placeholder: "Auto",
+		description: "Ollama-native repetition penalty.",
+	},
+	{
+		path: "ollamaGeneration.repeatLastN",
+		label: "Repeat Last N",
+		type: "number",
+		placeholder: "Auto",
+		description: "Context span used for repetition control. -1 means the full context.",
+	},
+	{
+		path: "ollamaGeneration.seed",
+		label: "Seed",
+		type: "number",
+		placeholder: "Auto",
+		description: "Fixed generation seed for reproducible runs.",
+	},
+	{
+		path: "ollamaGeneration.stop",
+		label: "Stop Sequences",
+		type: "text",
+		placeholder: "One sequence per line",
+		description: "One Ollama stop sequence per line.",
+	},
+	{
+		path: "ollamaGeneration.keepAlive",
+		label: "Keep Alive",
+		type: "text",
+		placeholder: "Auto / 5m / 0",
+		description: "How long Ollama should keep the model loaded. Use 0 to unload after the request.",
+	},
+	{
+		path: "mediaBudget.maxImageEncodedBytes",
+		label: "Max Image Encoded Size (bytes)",
+		type: "number",
+		placeholder: "12582912",
+		description: "Local Ollama base64/media transport limit per image.",
+	},
+	{
+		path: "mediaBudget.maxImageDecodedBytes",
+		label: "Max Image Decoded Size (bytes)",
+		type: "number",
+		placeholder: "8388608",
+		description: "Local Ollama decoded image limit per image.",
+	},
+	{
+		path: "mediaBudget.maxTotalMediaBytes",
+		label: "Max Total Image Payload (bytes)",
+		type: "number",
+		placeholder: "25165824",
+		description: "Local Ollama encoded image budget for one request.",
 	},
 ];
 
@@ -1072,13 +1213,16 @@ const OPENAI_COMPATIBLE_SPEC_OVERRIDES: BuiltinSpecOverride[] = [
 		// models would always load with Ollama's 4096-token server default.
 		family: "ollama",
 		popular: 25,
-		capabilities: ["tools"],
+		// Ollama capabilities are model-specific and are resolved from native
+		// /api/show metadata. Do not advertise tools at provider level because
+		// installed Ollama models legitimately vary in tool support.
 		defaultModelId: "",
 		apiKeyEnv: ["OLLAMA_API_KEY"],
 		// Local Ollama models are discovered dynamically; do not inherit the
 		// generated Ollama Cloud catalog when merging the models.dev spec.
 		modelsFactory: () => ({}),
 		defaults: { baseUrl: "http://localhost:11434" },
+		configFields: OLLAMA_CONFIG_FIELDS,
 		modelsSourceUrl: "http://localhost:11434/api/tags",
 	},
 	{

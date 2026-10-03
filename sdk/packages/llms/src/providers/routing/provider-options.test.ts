@@ -22,6 +22,7 @@ type RequestOverrides = Partial<GatewayStreamRequest> & {
 type ContextOverrides = {
 	providerId?: string;
 	modelId?: string;
+	configOptions?: Record<string, unknown>;
 	family?: string;
 	contextWindow?: number;
 	maxOutputTokens?: number;
@@ -99,7 +100,7 @@ function makeContext(options?: ContextOverrides): GatewayProviderContext {
 			capabilities: options?.capabilities,
 			metadata: modelMetadata,
 		},
-		config: { providerId },
+		config: { providerId, options: options?.configOptions },
 	};
 }
 
@@ -319,6 +320,47 @@ describe("mergeProviderOptionPatches", () => {
 				{ foo: { c: 3 } },
 			]),
 		).toEqual({ foo: { a: 1, b: 2, c: 3 } });
+	});
+});
+
+
+describe("composeAiSdkProviderOptions: Ollama generation options", () => {
+	it("maps configured native generation values into the Ollama options bucket", () => {
+		const result = composeAiSdkProviderOptions(
+			makeRequest({ providerId: "ollama", modelId: "local-model" }),
+			makeContext({
+				providerId: "ollama",
+				modelId: "local-model",
+				contextWindow: 32768,
+				configOptions: {
+					ollamaGeneration: {
+						temperature: 0.2,
+						topP: 0.9,
+						topK: 40,
+						minP: 0.05,
+						repeatPenalty: 1.1,
+						repeatLastN: -1,
+						seed: 7,
+						stop: ["<stop>"],
+						keepAlive: "5m",
+					},
+				},
+			}),
+		);
+		expect(result.ollama).toEqual({
+			options: {
+				num_ctx: 32768,
+				temperature: 0.2,
+				top_p: 0.9,
+				top_k: 40,
+				min_p: 0.05,
+				repeat_penalty: 1.1,
+				repeat_last_n: -1,
+				seed: 7,
+				stop: ["<stop>"],
+				keep_alive: "5m",
+			},
+		});
 	});
 });
 

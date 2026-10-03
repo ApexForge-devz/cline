@@ -113,6 +113,86 @@ describe("SettingsView font size", () => {
 	});
 });
 
+describe("SettingsView compaction settings", () => {
+	it("loads the persisted compaction mode and writes changes", async () => {
+		invoke.mockImplementation(async (command: string) => {
+			if (command === "get_feature_flags") return { cloudAgents: false, cloudAgentsAvailable: false };
+			if (command === "get_desktop_settings") return { cloudSessionsEnabled: false };
+			if (command === "get_global_settings") {
+				return { telemetryOptOut: false, autoUpdateEnabled: true, compactionEnabled: true, compactionStrategy: "basic", toolAutoApprove: true };
+			}
+			if (command === "set_compaction_mode") {
+				return { telemetryOptOut: false, autoUpdateEnabled: true, compactionEnabled: false, compactionStrategy: "basic", toolAutoApprove: true };
+			}
+			return { telemetryOptOut: false, autoUpdateEnabled: true };
+		});
+
+		await act(async () => {
+			root.render(<SettingsView onExportDiagnostics={vi.fn()} onNavigateSection={vi.fn()} section="General" />);
+		});
+
+		await vi.waitFor(() => {
+			const select = container.querySelector('[aria-label="Context compaction mode"]') as HTMLSelectElement | null;
+			expect(select?.value).toBe("basic");
+		});
+
+		await act(async () => {
+			const select = container.querySelector('[aria-label="Context compaction mode"]') as HTMLSelectElement;
+			select.value = "off";
+			select.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+
+		await vi.waitFor(() => {
+			expect(invoke).toHaveBeenCalledWith("set_compaction_mode", { mode: "off" });
+		});
+	});
+});
+
+describe("SettingsView local agent defaults", () => {
+	it("loads and renders persisted local autonomy controls", async () => {
+		invoke.mockImplementation(async (command: string) => {
+			if (command === "get_feature_flags") {
+				return { cloudAgents: false, cloudAgentsAvailable: false };
+			}
+			if (command === "get_desktop_settings") {
+				return { cloudSessionsEnabled: false };
+			}
+			if (command === "get_global_settings") {
+				return {
+					telemetryOptOut: false,
+					autoUpdateEnabled: true,
+					toolAutoApprove: false,
+					localAgent: {
+						maxIterations: 12,
+						maxParallelToolCalls: 2,
+						maxTokensPerTurn: 4096,
+						maxConsecutiveMistakes: 4,
+						loopDetection: { softThreshold: 3, hardThreshold: 5 },
+						autonomyRule: "Inspect, act, verify.",
+					},
+				};
+			}
+			return { telemetryOptOut: false, autoUpdateEnabled: true };
+		});
+
+		await act(async () => {
+			root.render(
+				<SettingsView
+					onExportDiagnostics={vi.fn()}
+					onNavigateSection={vi.fn()}
+					section="General"
+				/>,
+			);
+		});
+
+		await vi.waitFor(() => {
+			expect(container.textContent).toContain("Local agent defaults");
+			expect(container.textContent).toContain("Inspect, act, verify.");
+			expect(container.querySelector('[aria-label="Auto-approve tools globally"]')).not.toBeNull();
+		});
+	});
+});
+
 describe("SettingsView cloud sessions rollout", () => {
 	it.each([
 		{

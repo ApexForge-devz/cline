@@ -313,6 +313,7 @@ type ChatInputBarProps = {
 	provider: string;
 	model: string;
 	modelContextWindow?: number;
+	effectiveContextWindow?: number;
 	mode: "act" | "plan";
 	thinking: ChatSessionConfig["thinking"];
 	reasoningEffort: ChatSessionConfig["reasoningEffort"];
@@ -351,6 +352,7 @@ type ChatInputBarProps = {
 		tokensOut: number;
 		cacheReadTokens?: number;
 		totalCostUsd?: number;
+		lastCompaction?: { reason: string; at: number; thresholdRatio?: number } | null;
 	};
 };
 
@@ -363,6 +365,7 @@ function ChatInputBarImpl({
 	provider,
 	model,
 	modelContextWindow,
+	effectiveContextWindow,
 	mode,
 	thinking,
 	reasoningEffort,
@@ -1624,12 +1627,14 @@ function ChatInputBarImpl({
 							</div>
 							<TokenUsageRing
 								usage={{
-									contextWindow: modelContextWindow,
+									contextWindow: effectiveContextWindow,
 									tokensIn: summary.tokensIn,
 									tokensOut: summary.tokensOut,
 									cacheReadTokens: summary.cacheReadTokens ?? 0,
 									totalCost: summary.totalCostUsd,
 								}}
+								contextWindow={effectiveContextWindow}
+								lastCompaction={summary.lastCompaction}
 							/>
 						</div>
 					) : null}

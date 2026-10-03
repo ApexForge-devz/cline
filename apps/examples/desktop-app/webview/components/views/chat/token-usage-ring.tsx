@@ -12,9 +12,21 @@ import { formatCostUsd } from "@/hooks/use-session-history";
 /** Native popover, trigger styling, and cost formatting remain desktop-owned. */
 export function TokenUsageRing({
 	usage,
+	contextWindow,
+	lastCompaction,
 }: {
 	usage: AgentContextUsageData & { totalCost?: number };
+	contextWindow?: number;
+	lastCompaction?: { reason: string; at: number; thresholdRatio?: number } | null;
 }) {
+	const compactionLabel =
+		lastCompaction?.reason === "auto_compaction"
+			? "Automatic"
+			: lastCompaction?.reason === "manual_compaction"
+				? "Manual"
+				: lastCompaction?.reason === "overflow_recovery_compaction"
+					? "Overflow recovery"
+					: undefined;
 	return (
 		<AgentContextUsage usage={usage} costLabel={formatCostUsd(usage.totalCost)}>
 			{({ triggerLabel, ring, details }) => (
@@ -39,6 +51,24 @@ export function TokenUsageRing({
 						sideOffset={8}
 					>
 						{details}
+						{contextWindow ? (
+							<div className="border-t px-4 py-3 text-xs text-muted-foreground">
+								<div className="flex items-center justify-between gap-4">
+									<span>Effective context</span>
+									<span className="font-mono tabular-nums text-foreground">{contextWindow.toLocaleString()}</span>
+								</div>
+								<div className="flex items-center justify-between gap-4">
+									<span>Auto-compaction threshold</span>
+									<span className="font-mono tabular-nums text-foreground">{Math.round((lastCompaction?.thresholdRatio ?? 0.9) * 100)}%</span>
+								</div>
+								{compactionLabel && lastCompaction ? (
+									<div className="mt-1 flex items-center justify-between gap-4">
+										<span>Last compaction</span>
+										<span className="text-foreground" title={new Date(lastCompaction.at).toLocaleString()}>{compactionLabel}</span>
+									</div>
+								) : null}
+							</div>
+						) : null}
 					</PopoverContent>
 				</Popover>
 			)}

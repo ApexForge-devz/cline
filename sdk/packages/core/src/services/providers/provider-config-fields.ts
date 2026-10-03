@@ -4,6 +4,12 @@ import { isOAuthProvider } from "../../auth/provider-auth-registry";
 export type ProviderConfigFieldKey =
 	| "apiKey"
 	| "baseUrl"
+	| "timeout"
+	| "contextWindow"
+	| "maxTokens"
+	| "reasoning.enabled"
+	| "reasoning.effort"
+	| "reasoning.budgetTokens"
 	| "azureApiVersion"
 	| "awsRegion"
 	| "awsProfile"
@@ -36,6 +42,12 @@ export interface ProviderConfigFields {
 const FIELD_KEYS: ProviderConfigFieldKey[] = [
 	"apiKey",
 	"baseUrl",
+	"timeout",
+	"contextWindow",
+	"maxTokens",
+	"reasoning.enabled",
+	"reasoning.effort",
+	"reasoning.budgetTokens",
 	"azureApiVersion",
 	"awsRegion",
 	"awsProfile",
@@ -114,9 +126,44 @@ const PROVIDER_CONFIG_FIELD_METADATA: Partial<
 		},
 	},
 	ollama: {
+		description:
+			"Local Ollama settings are persisted separately from the model metadata discovered from Ollama.",
 		fields: {
 			apiKey: {
 				note: "Keep empty if no API key for local inference.",
+			},
+			timeout: {
+				label: "Request Timeout (ms)",
+				placeholder: "300000",
+				note: "Response-start timeout. 300000 ms = 5 minutes.",
+				optional: true,
+			},
+			contextWindow: {
+				label: "Context Window (tokens)",
+				placeholder: "32768",
+				note: "Provider default. Per-model overrides can be set below.",
+				optional: true,
+			},
+			maxTokens: {
+				label: "Max Output Tokens",
+				placeholder: "Auto",
+				note: "Leave blank to use the runtime/model default.",
+				optional: true,
+			},
+			"reasoning.enabled": {
+				label: "Thinking",
+				note: "Auto leaves the model's discovered reasoning behavior unchanged.",
+				optional: true,
+			},
+			"reasoning.effort": {
+				label: "Reasoning Effort",
+				optional: true,
+			},
+			"reasoning.budgetTokens": {
+				label: "Thinking Budget (tokens)",
+				placeholder: "Auto",
+				note: "Leave blank to use the model/provider default.",
+				optional: true,
 			},
 		},
 	},

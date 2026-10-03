@@ -67,9 +67,13 @@ import {
 	saveLocalProviderSettings,
 	saveVoiceInputSettings,
 	setAutoUpdateEnabledGlobally,
+	setCompactionModeGlobally,
+	setLocalAgentSettingsGlobally,
 	setMcpServerDisabled,
+	setToolAutoApproveGlobally,
 	setTelemetryOptOutGlobally,
 	transcribeConfiguredVoiceInput,
+	getOllamaRuntimeDiagnostics,
 	updateLocalProvider,
 	updateMcpSettingsFileSync,
 	upgradeManagedHub,
@@ -3218,8 +3222,43 @@ export async function handleCommand(
 		setAutoUpdateEnabledGlobally(args.auto_update_enabled);
 		return readGlobalSettings();
 	}
+	if (command === "set_compaction_mode") {
+		const mode = args?.mode;
+		if (mode !== "off" && mode !== "basic" && mode !== "agentic") {
+			throw new Error("mode must be one of: off, basic, agentic");
+		}
+		setCompactionModeGlobally(mode);
+		return readGlobalSettings();
+	}
+	if (command === "set_local_agent_settings") {
+		const updates =
+			args?.settings &&
+			typeof args.settings === "object" &&
+			!Array.isArray(args.settings)
+				? args.settings
+				: {};
+		setLocalAgentSettingsGlobally(
+			updates as Parameters<typeof setLocalAgentSettingsGlobally>[0],
+		);
+		return readGlobalSettings();
+	}
+	if (command === "set_tool_auto_approve") {
+		if (typeof args?.tool_auto_approve !== "boolean") {
+			throw new Error("tool_auto_approve must be a boolean");
+		}
+		setToolAutoApproveGlobally(args.tool_auto_approve);
+		return readGlobalSettings();
+	}
 	if (command === "get_desktop_settings") {
 		return readDesktopSettings();
+	}
+	if (command === "get_ollama_runtime_diagnostics") {
+		const providerId = String(args?.provider ?? "ollama").trim();
+		if (providerId !== "ollama") throw new Error("provider must be ollama");
+		const manager = new ProviderSettingsManager();
+		const settings = manager.getProviderSettings("ollama");
+		const baseUrl = String(settings?.baseUrl ?? "http://localhost:11434").trim();
+		return await getOllamaRuntimeDiagnostics(baseUrl);
 	}
 	if (command === "export_diagnostics") {
 		const sessionIds = Array.isArray(args?.sessionIds)

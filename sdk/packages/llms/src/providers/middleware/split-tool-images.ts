@@ -54,8 +54,8 @@ import type {
 } from "@ai-sdk/provider";
 import {
 	createMediaBudgetState,
-	DEFAULT_MAX_IMAGE_DECODED_BYTES,
-	DEFAULT_MAX_IMAGE_ENCODED_BYTES,
+	resolveMediaBudget,
+	type MediaBudgetOptions,
 	IMAGE_OMITTED_PLACEHOLDER,
 	isCanonicalBase64,
 	type MediaBudgetState,
@@ -116,6 +116,7 @@ function imageOmittedTextPart(): LanguageModelV4TextPart {
 function reserveUnknownUrlMediaBudget(
 	url: string,
 	mediaState: MediaBudgetState,
+	budget: ReturnType<typeof resolveMediaBudget>,
 ): boolean {
 	let parsed: URL;
 	try {
@@ -142,8 +143,8 @@ function reserveUnknownUrlMediaBudget(
 				base64.length,
 				0,
 				{
-					maxImageEncodedBytes: DEFAULT_MAX_IMAGE_ENCODED_BYTES,
-					maxImageDecodedBytes: DEFAULT_MAX_IMAGE_DECODED_BYTES,
+					maxImageEncodedBytes: budget.maxImageEncodedBytes,
+					maxImageDecodedBytes: budget.maxImageDecodedBytes,
 				},
 				mediaState,
 			) === null
@@ -158,11 +159,11 @@ function reserveUnknownUrlMediaBudget(
 	// conservative per-image cap instead of letting URL media count as free.
 	return (
 		reserveImageMediaBytes(
-			DEFAULT_MAX_IMAGE_ENCODED_BYTES,
+			budget.maxImageEncodedBytes,
 			0,
 			{
-				maxImageEncodedBytes: DEFAULT_MAX_IMAGE_ENCODED_BYTES,
-				maxImageDecodedBytes: DEFAULT_MAX_IMAGE_DECODED_BYTES,
+				maxImageEncodedBytes: budget.maxImageEncodedBytes,
+				maxImageDecodedBytes: budget.maxImageDecodedBytes,
 			},
 			mediaState,
 		) === null
@@ -193,14 +194,15 @@ function estimateMediaDataEncodedBytes(data: unknown): number {
 function reserveGenericMediaDataBudget(
 	data: unknown,
 	mediaState: MediaBudgetState,
+	budget: ReturnType<typeof resolveMediaBudget>,
 ): boolean {
 	return (
 		reserveImageMediaBytes(
 			estimateMediaDataEncodedBytes(data),
 			0,
 			{
-				maxImageEncodedBytes: DEFAULT_MAX_IMAGE_ENCODED_BYTES,
-				maxImageDecodedBytes: DEFAULT_MAX_IMAGE_DECODED_BYTES,
+				maxImageEncodedBytes: budget.maxImageEncodedBytes,
+				maxImageDecodedBytes: budget.maxImageDecodedBytes,
 			},
 			mediaState,
 		) === null
@@ -219,6 +221,7 @@ function reserveGenericMediaDataBudget(
 function splitContentOutputMedia(
 	output: LanguageModelV4ToolResultOutput,
 	mediaState: MediaBudgetState,
+	budget: ReturnType<typeof resolveMediaBudget>,
 ): SplitResult | null {
 	if (output.type !== "content") {
 		return null;
@@ -241,8 +244,8 @@ function splitContentOutputMedia(
 				currentPart.mediaType,
 				currentPart.data.data,
 				{
-					maxImageEncodedBytes: DEFAULT_MAX_IMAGE_ENCODED_BYTES,
-					maxImageDecodedBytes: DEFAULT_MAX_IMAGE_DECODED_BYTES,
+					maxImageEncodedBytes: budget.maxImageEncodedBytes,
+					maxImageDecodedBytes: budget.maxImageDecodedBytes,
 				},
 				mediaState,
 			);
@@ -269,8 +272,8 @@ function splitContentOutputMedia(
 					undefined,
 					url,
 					{
-						maxImageEncodedBytes: DEFAULT_MAX_IMAGE_ENCODED_BYTES,
-						maxImageDecodedBytes: DEFAULT_MAX_IMAGE_DECODED_BYTES,
+						maxImageEncodedBytes: budget.maxImageEncodedBytes,
+						maxImageDecodedBytes: budget.maxImageDecodedBytes,
 					},
 					mediaState,
 				);
@@ -288,7 +291,7 @@ function splitContentOutputMedia(
 						),
 					},
 				};
-			} else if (!reserveUnknownUrlMediaBudget(url, mediaState)) {
+			} else if (!reserveUnknownUrlMediaBudget(url, mediaState, budget)) {
 				newValue.push(imageOmittedTextPart());
 				mutated = true;
 				continue;
@@ -298,6 +301,7 @@ function splitContentOutputMedia(
 				!reserveUnknownUrlMediaBudget(
 					currentPart.data.url.toString(),
 					mediaState,
+					budget,
 				)
 			) {
 				newValue.push(imageOmittedTextPart());
@@ -305,7 +309,7 @@ function splitContentOutputMedia(
 				continue;
 			}
 		} else if (currentPart.data.type === "data") {
-			if (!reserveGenericMediaDataBudget(currentPart.data.data, mediaState)) {
+			if (!reserveGenericMediaDataBudget(currentPart.data.data, mediaState, budget)) {
 				newValue.push(imageOmittedTextPart());
 				mutated = true;
 				continue;
@@ -345,13 +349,17 @@ function splitContentOutputMedia(
  * Returns the (possibly new) prompt array and a `mutated` flag for
  * test/observation use.
  */
-export function rewritePromptToolImages(prompt: LanguageModelV4Message[]): {
+export function rewritePromptToolImages(
+	prompt: LanguageModelV4Message[],
+	budgetOptions?: MediaBudgetOptions,
+): {
 	prompt: LanguageModelV4Message[];
 	mutated: boolean;
 } {
 	const newPrompt: LanguageModelV4Message[] = [];
 	let mutated = false;
 	const mediaState = createMediaBudgetState();
+	const budget = resolveMediaBudget(budgetOptions);
 
 	for (const message of prompt) {
 		if (message.role !== "tool") {
@@ -364,7 +372,7 @@ export function rewritePromptToolImages(prompt: LanguageModelV4Message[]): {
 			if (part.type !== "tool-result") {
 				return part;
 			}
-			const split = splitContentOutputMedia(part.output, mediaState);
+			const split = splitContentOutputMedia(part.output, mediaState, budget);
 			if (!split) {
 				return part;
 			}
@@ -404,19 +412,21 @@ export function rewritePromptToolImages(prompt: LanguageModelV4Message[]): {
  * structurally-faithful tool-results with the placeholder text + sibling
  * user message pattern unnecessarily.
  */
-export const splitToolImagesMiddleware: LanguageModelV4Middleware = {
-	specificationVersion: "v4",
-	transformParams: async ({ params }) => {
-		const { prompt: newPrompt, mutated } = rewritePromptToolImages(
-			params.prompt,
-		);
-		if (!mutated) {
-			return params;
-		}
-		const next: LanguageModelV4CallOptions = {
-			...params,
-			prompt: newPrompt,
-		};
-		return next;
-	},
-};
+export function createSplitToolImagesMiddleware(
+	mediaBudget?: MediaBudgetOptions,
+): LanguageModelV4Middleware {
+	return {
+		specificationVersion: "v4",
+		transformParams: async ({ params }) => {
+			const { prompt: newPrompt, mutated } = rewritePromptToolImages(
+				params.prompt,
+				mediaBudget,
+			);
+			if (!mutated) return params;
+			const next: LanguageModelV4CallOptions = { ...params, prompt: newPrompt };
+			return next;
+		},
+	};
+}
+
+export const splitToolImagesMiddleware = createSplitToolImagesMiddleware();

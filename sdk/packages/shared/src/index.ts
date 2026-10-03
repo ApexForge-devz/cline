@@ -177,6 +177,7 @@ export {
 	type ImageMediaValidationResult,
 	type ImageMediaValidationSuccess,
 	imageBase64DecodedByteLength,
+	OLLAMA_DEFAULT_MEDIA_BUDGET,
 	imageBase64EncodedByteLength,
 	imageBase64LengthForDecodedBytes,
 	imageFileMaxDecodedBytesForBase64Limit,
@@ -448,8 +449,11 @@ export type {
 	ProviderConfigFieldType,
 	ProviderListItem,
 	ProviderModel,
+	ProviderModelCapabilityOverrides,
 	ProviderModelFeatured,
 	ProviderModelFeaturedTier,
+	ProviderModelSettingsOverride,
+	ProviderModelSettingsOverrides,
 	ProviderModelsResponse,
 	ProviderOAuthLoginResponse,
 	ProviderProtocol,
@@ -621,3 +625,5 @@ export { createTool } from "./tools/create";
 export * from "./types";
 export { AUTH_ERROR_PATTERNS, isLikelyAuthError } from "./types/auth";
 export { initVcr } from "./vcr";
+
+export * from "./ollama";

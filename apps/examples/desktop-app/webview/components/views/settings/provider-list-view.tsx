@@ -26,10 +26,12 @@ import {
 	X,
 } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import type { ReasoningLevel } from "@cline/shared/browser";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useOAuthUserCode } from "@/hooks/use-oauth-user-code";
-import { openExternalUrl } from "@/lib/desktop-client";
+import { desktopClient, openExternalUrl } from "@/lib/desktop-client";
 import {
 	getProviderAuthKind,
 	isProviderConnected,
@@ -509,7 +511,7 @@ function ConfigFieldRow({
 					onChange={(event) => onCommit(event.target.value)}
 					value={valueText}
 				>
-					<option value="">Not set</option>
+					<option value="">{field.path.startsWith("reasoning.") ? "Auto" : "Not set"}</option>
 					{field.options?.map((option) => (
 						<option key={String(option.value)} value={String(option.value)}>
 							{option.label}
@@ -568,6 +570,258 @@ function ConfigFieldRow({
 	);
 }
 
+type ModelOverride = NonNullable<Provider["modelOverrides"]>[string];
+type CapabilityOverrideKey = "vision" | "tools" | "reasoning";
+
+const REASONING_EFFORT_OPTIONS = [
+	["minimal", "Minimal"],
+	["low", "Low"],
+	["medium", "Medium"],
+	["high", "High"],
+	["xhigh", "XHigh"],
+	["max", "Max"],
+] as const;
+
+function parsePositiveInteger(value: string): number | undefined {
+	const trimmed = value.trim();
+	if (!trimmed) return undefined;
+	const parsed = Number(trimmed);
+	return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function ModelCapabilitySelect({
+	label,
+	detected,
+	value,
+	onChange,
+}: {
+	label: string;
+	detected?: boolean;
+	value?: boolean;
+	onChange: (value: boolean | undefined) => void;
+}) {
+	return (
+		<label className="grid grid-cols-[minmax(8rem,1fr)_minmax(9rem,12rem)] items-center gap-3 text-sm">
+			<span className="text-muted-foreground">
+				{label}{" "}
+				<span className="text-xs">
+					{detected === undefined ? "(unknown)" : detected ? "(detected)" : "(not detected)"}
+				</span>
+			</span>
+			<select
+				aria-label={`${label} capability override`}
+				className="h-9 rounded border border-border bg-background px-3 text-sm text-foreground"
+				onChange={(event) => onChange(event.target.value === "auto" ? undefined : event.target.value === "enabled")}
+				value={value === undefined ? "auto" : value ? "enabled" : "disabled"}
+			>
+				<option value="auto">Auto</option>
+				<option value="enabled">Enabled</option>
+				<option value="disabled">Disabled</option>
+			</select>
+		</label>
+	);
+}
+
+function ModelOverrideEditor({
+	model,
+	override,
+	onChange,
+}: {
+	model: ProviderModel;
+	override?: ModelOverride;
+	onChange: (value: ModelOverride | undefined) => void;
+}) {
+	const update = (next: ModelOverride) => {
+		const cleaned = { ...next };
+		if (cleaned.reasoning && Object.keys(cleaned.reasoning).length === 0) delete cleaned.reasoning;
+		if (cleaned.capabilities && Object.keys(cleaned.capabilities).length === 0) delete cleaned.capabilities;
+		onChange(Object.keys(cleaned).length > 0 ? cleaned : undefined);
+	};
+	const updateReasoning = (patch: Partial<NonNullable<ModelOverride["reasoning"]>>) =>
+		update({ ...override, reasoning: { ...(override?.reasoning ?? {}), ...patch } });
+	const updateCapability = (key: CapabilityOverrideKey, value: boolean | undefined) => {
+		const capabilities = { ...(override?.capabilities ?? {}) };
+		if (value === undefined) delete capabilities[key];
+		else capabilities[key] = value;
+		update({ ...override, capabilities });
+	};
+	return (
+		<div className="border-b bg-muted/20 px-5 py-4">
+			<div className="flex items-start justify-between gap-4">
+				<div>
+					<p className="text-sm font-medium text-foreground">{model.name}</p>
+					<p className="mt-1 text-xs text-muted-foreground">Detected context: {model.contextWindow ? `${model.contextWindow.toLocaleString()} tokens` : "Unknown"}</p>
+				</div>
+				<span className="text-xs text-muted-foreground">{override ? "Custom override" : "Automatic"}</span>
+			</div>
+			<div className="mt-4 grid gap-4 md:grid-cols-2">
+				<label className="grid gap-1.5 text-sm">
+					<span className="text-muted-foreground">Context Window (tokens)</span>
+					<Input aria-label="Model context window override" className="h-9" defaultValue={override?.contextWindow ?? ""} onBlur={(event) => update({ ...override, contextWindow: parsePositiveInteger(event.target.value) })} placeholder={model.contextWindow?.toString() ?? "Auto"} type="number" />
+				</label>
+				<label className="grid gap-1.5 text-sm">
+					<span className="text-muted-foreground">Max Output Tokens</span>
+					<Input aria-label="Model max output tokens override" className="h-9" defaultValue={override?.maxTokens ?? ""} onBlur={(event) => update({ ...override, maxTokens: parsePositiveInteger(event.target.value) })} placeholder="Auto" type="number" />
+				</label>
+			</div>
+			<div className="mt-5 border-t pt-4">
+				<h4 className="text-sm font-medium text-foreground">Reasoning</h4>
+				<div className="mt-3 grid gap-4 md:grid-cols-3">
+					<label className="grid gap-1.5 text-sm">
+						<span className="text-muted-foreground">Thinking</span>
+						<select aria-label="Model thinking override" className="h-9 rounded border border-border bg-background px-3 text-sm text-foreground" onChange={(event) => updateReasoning({ enabled: event.target.value === "auto" ? undefined : event.target.value === "enabled" })} value={override?.reasoning?.enabled === undefined ? "auto" : override.reasoning.enabled ? "enabled" : "disabled"}>
+							<option value="auto">Auto</option>
+							<option value="enabled">Enabled</option>
+							<option value="disabled">Disabled</option>
+						</select>
+					</label>
+					<label className="grid gap-1.5 text-sm">
+						<span className="text-muted-foreground">Reasoning Effort</span>
+						<select aria-label="Model reasoning effort override" className="h-9 rounded border border-border bg-background px-3 text-sm text-foreground" onChange={(event) => updateReasoning({ effort: event.target.value === "auto" ? undefined : event.target.value as ReasoningLevel })} value={override?.reasoning?.effort ?? "auto"}>
+							<option value="auto">Auto</option>
+							{REASONING_EFFORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+						</select>
+					</label>
+					<label className="grid gap-1.5 text-sm">
+						<span className="text-muted-foreground">Thinking Budget (tokens)</span>
+						<Input aria-label="Model thinking budget override" className="h-9" defaultValue={override?.reasoning?.budgetTokens ?? ""} onBlur={(event) => updateReasoning({ budgetTokens: parsePositiveInteger(event.target.value) })} placeholder="Auto" type="number" />
+					</label>
+				</div>
+			</div>
+			<div className="mt-5 border-t pt-4">
+				<h4 className="text-sm font-medium text-foreground">Capability overrides</h4>
+				<div className="mt-3 grid gap-3">
+					<ModelCapabilitySelect detected={model.supportsVision} label="Vision" onChange={(value) => updateCapability("vision", value)} value={override?.capabilities?.vision} />
+					<ModelCapabilitySelect detected={undefined} label="Tool Calling" onChange={(value) => updateCapability("tools", value)} value={override?.capabilities?.tools} />
+					<ModelCapabilitySelect detected={model.supportsReasoning} label="Reasoning" onChange={(value) => updateCapability("reasoning", value)} value={override?.capabilities?.reasoning} />
+				</div>
+			</div>
+			{override ? <Button className="mt-4" onClick={() => onChange(undefined)} size="sm" type="button" variant="outline">Reset this model to Auto</Button> : null}
+		</div>
+	);
+}
+
+function OllamaRuntimeDiagnostics() {
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [result, setResult] = useState<{
+		baseUrl: string;
+		version: string | null;
+		models: Array<{
+			name?: string;
+			size?: number;
+			sizeVram?: number;
+			contextLength?: number;
+		}>;
+		checkedAt: string;
+		unsupportedControls: string[];
+	} | null>(null);
+	const [copied, setCopied] = useState(false);
+
+	const refresh = async () => {
+		setLoading(true);
+		setError(null);
+		setCopied(false);
+		try {
+			const next = await desktopClient.invoke<typeof result>(
+				"get_ollama_runtime_diagnostics",
+				{ provider: "ollama" },
+			);
+			setResult(next);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const copyDiagnostics = async () => {
+		if (!result || !navigator.clipboard?.writeText) return;
+		await navigator.clipboard.writeText(JSON.stringify(result, null, 2));
+		setCopied(true);
+	};
+
+	return (
+		<section className="mt-6 rounded-lg border">
+			<div className="border-b bg-muted/30 px-4 py-3">
+				<h3 className="text-sm font-medium text-foreground">Runtime (Expert)</h3>
+				<p className="mt-1 text-xs text-muted-foreground">
+					Inspect the Ollama server and loaded-model memory state. Hardware overrides that are not documented by the running API are intentionally not exposed.
+				</p>
+			</div>
+			<div className="p-4">
+				<div className="flex gap-2">
+					<Button disabled={loading} onClick={() => void refresh()} size="sm" type="button" variant="outline">
+						{loading ? <Loader2 className="size-3 animate-spin" /> : <RefreshCw className="size-3" />}
+						Inspect Ollama runtime
+					</Button>
+					{result ? <Button onClick={() => void copyDiagnostics()} size="sm" type="button" variant="outline"><Copy className="size-3" />{copied ? "Copied" : "Copy diagnostics"}</Button> : null}
+				</div>
+				{error ? <p className="mt-3 text-xs text-destructive" role="alert">Ollama runtime diagnostics failed: {error}</p> : null}
+				{result ? (
+					<div className="mt-4 space-y-3 text-xs">
+						<div className="grid grid-cols-2 gap-2 rounded border p-3 sm:grid-cols-4">
+							<div><div className="text-muted-foreground">Server</div><div className="font-medium">{result.baseUrl}</div></div>
+							<div><div className="text-muted-foreground">Version</div><div className="font-medium">{result.version ?? "Unavailable"}</div></div>
+							<div><div className="text-muted-foreground">Loaded models</div><div className="font-medium">{result.models.length}</div></div>
+							<div><div className="text-muted-foreground">Checked</div><div className="font-medium">{new Date(result.checkedAt).toLocaleTimeString()}</div></div>
+						</div>
+						{result.models.length > 0 ? (
+							<div className="space-y-2">
+								{result.models.map((model) => (
+									<div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 rounded border px-3 py-2" key={`${model.name}-${model.contextLength ?? "unknown"}`}>
+										<span className="truncate font-medium">{model.name ?? "Unknown model"}</span>
+										<span>{model.contextLength ? `${model.contextLength.toLocaleString()} ctx` : "ctx unknown"}</span>
+										<span>{model.sizeVram != null ? `${(model.sizeVram / 1024 ** 3).toFixed(1)} GiB VRAM` : "VRAM unknown"}</span>
+									</div>
+								))}
+							</div>
+						) : <p className="text-muted-foreground">No Ollama models are currently loaded.</p>}
+						<p className="text-muted-foreground">Undocumented expert controls intentionally unavailable: {result.unsupportedControls.join(", ")}.</p>
+					</div>
+				) : null}
+			</div>
+		</section>
+	);
+}
+
+function CustomHeadersEditor({
+	headers,
+	onChange,
+}: {
+	headers?: Record<string, string>;
+	onChange: (headers: Record<string, string>) => void;
+}) {
+	const [text, setText] = useState(() => JSON.stringify(headers ?? {}, null, 2));
+	const [error, setError] = useState<string | null>(null);
+	useEffect(() => {
+		setText(JSON.stringify(headers ?? {}, null, 2));
+		setError(null);
+	}, [headers]);
+	const apply = () => {
+		try {
+			const parsed: unknown = JSON.parse(text);
+			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Headers must be a JSON object of string values.");
+			const next: Record<string, string> = {};
+			for (const [key, value] of Object.entries(parsed)) {
+				if (typeof value !== "string") throw new Error(`Header "${key}" must have a string value.`);
+				if (key.trim()) next[key.trim()] = value;
+			}
+			setError(null);
+			setText(JSON.stringify(next, null, 2));
+			onChange(next);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	};
+	return (
+		<section className="mt-6 rounded-lg border">
+			<div className="border-b bg-muted/30 px-4 py-3"><h3 className="text-sm font-medium text-foreground">Advanced</h3><p className="mt-1 text-xs text-muted-foreground">Optional custom HTTP headers sent to Ollama. Values are stored with the provider settings.</p></div>
+			<div className="p-4"><Textarea aria-label="Custom headers JSON" className="min-h-32 font-mono text-xs" onChange={(event) => setText(event.target.value)} placeholder={'{\n  "X-Custom-Header": "value"\n}'} value={text} />{error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}<div className="mt-3 flex justify-end"><Button onClick={apply} size="sm" type="button">Apply headers</Button></div></div>
+		</section>
+	);
+}
+
 export function ProviderDetailContent({
 	provider,
 	onBack,
@@ -612,6 +866,10 @@ export function ProviderDetailContent({
 	const [addModelState, setAddModelState] = useState<{
 		providerId: string;
 		value: string;
+	} | null>(null);
+	const [modelEditorState, setModelEditorState] = useState<{
+		providerId: string;
+		modelId: string;
 	} | null>(null);
 	const [favoriteModels, setFavoriteModels] = useState(readFavoriteModels);
 	const copiedModelTimeoutRef = useRef<number | undefined>(undefined);
@@ -670,6 +928,10 @@ export function ProviderDetailContent({
 			: null;
 	const isAddingModel = addModelState?.providerId === provider.id;
 	const newModelId = isAddingModel ? addModelState.value : "";
+	const selectedModelId =
+		modelEditorState?.providerId === provider.id
+			? modelEditorState.modelId
+			: null;
 	const modelSearchQuery = modelSearch.trim().toLowerCase();
 	const matchingModelList = modelSearchQuery
 		? modelList.filter(
@@ -790,6 +1052,13 @@ export function ProviderDetailContent({
 		setAddModelState(null);
 	};
 
+	const updateModelOverride = (modelId: string, value: ModelOverride | undefined) => {
+		const nextOverrides = { ...(provider.modelOverrides ?? {}) };
+		if (value && Object.keys(value).length > 0) nextOverrides[modelId] = value;
+		else delete nextOverrides[modelId];
+		onUpdate({ modelOverrides: nextOverrides });
+	};
+
 	const toggleFavoriteModel = (modelId: string) => {
 		setFavoriteModels((current) => {
 			const providerFavorites = new Set(current[provider.id] ?? []);
@@ -805,6 +1074,23 @@ export function ProviderDetailContent({
 	};
 
 	const oauthConnected = Boolean(provider.oauthAccessTokenPresent);
+	const isOllama = provider.id === "ollama";
+	const [ollamaAdvancedOpen, setOllamaAdvancedOpen] = useState(false);
+	const ollamaConnectionFields = configFields.filter((field) =>
+		["apiKey", "baseUrl", "timeout"].includes(field.path),
+	);
+	const ollamaModelFields = configFields.filter((field) =>
+		["contextWindow", "maxTokens"].includes(field.path),
+	);
+	const ollamaReasoningFields = configFields.filter((field) =>
+		field.path.startsWith("reasoning."),
+	);
+	const ollamaMediaFields = configFields.filter((field) =>
+		field.path.startsWith("mediaBudget."),
+	);
+	const ollamaGenerationFields = configFields.filter((field) =>
+		field.path.startsWith("ollamaGeneration."),
+	);
 
 	const connectionSection =
 		authKind === "oauth" ? (
@@ -919,7 +1205,89 @@ export function ProviderDetailContent({
 			</section>
 		) : (
 			<section className={cn("mb-8", isPanel ? "max-w-none" : "max-w-344")}>
-				{configFields.length > 0 ? (
+				{isOllama ? (
+					<>
+						{ollamaConnectionFields.length > 0 ? (
+							<section>
+								<h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-muted-foreground">Connection</h2>
+								<div className="flex flex-col">{ollamaConnectionFields.map(renderConfigFieldRow)}</div>
+							</section>
+						) : null}
+						{ollamaModelFields.length > 0 ? (
+							<section className="mt-6 border-t pt-5">
+								<div className="flex items-start justify-between gap-4">
+									<div>
+										<h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-muted-foreground">Model defaults</h2>
+										<p className="text-xs text-muted-foreground">Explicit values override the provider/model auto-detected defaults.</p>
+									</div>
+								</div>
+								<div className="flex flex-col">{ollamaModelFields.map(renderConfigFieldRow)}</div>
+								{Number(localConfigValues.contextWindow) > 65536 ? (
+									<p className="mt-3 rounded border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+										Large local context ({Number(localConfigValues.contextWindow).toLocaleString()} tokens) can materially increase KV-cache memory and CPU offload. Use a smaller value when running on limited-VRAM hardware.
+									</p>
+								) : null}
+							</section>
+						) : null}
+						{ollamaReasoningFields.length > 0 ? (
+							<section className="mt-6 border-t pt-5">
+								<h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-muted-foreground">Reasoning</h2>
+								<div className="flex flex-col">{ollamaReasoningFields.map(renderConfigFieldRow)}</div>
+							</section>
+						) : null}
+						<div className="mt-6 border-t pt-5">
+							<Button
+								aria-expanded={ollamaAdvancedOpen}
+								className="w-full justify-between"
+								onClick={() => setOllamaAdvancedOpen((open) => !open)}
+								size="sm"
+								type="button"
+								variant="ghost"
+							>
+								<span>Advanced local controls</span>
+								{ollamaAdvancedOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+							</Button>
+							{ollamaAdvancedOpen ? (
+								<div className="mt-2">
+									{ollamaMediaFields.length > 0 ? (
+										<section className="border-t pt-5">
+											<h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-muted-foreground">Media</h2>
+											<div className="flex flex-col">{ollamaMediaFields.map(renderConfigFieldRow)}</div>
+										</section>
+									) : null}
+									{ollamaGenerationFields.length > 0 ? (
+										<section className="mt-6 border-t pt-5">
+											<div className="flex items-start justify-between gap-4">
+												<div>
+													<h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-muted-foreground">Generation</h2>
+													<p className="text-xs text-muted-foreground">Only configured values are sent; blank fields stay on Ollama/model defaults.</p>
+												</div>
+												<Button
+													onClick={() => {
+														setLocalConfigValues((current) => {
+															const next = { ...current };
+															for (const field of ollamaGenerationFields) delete next[field.path];
+															return next;
+														});
+														onUpdate({ configValues: Object.fromEntries(ollamaGenerationFields.map((field) => [field.path, null])) });
+													}}
+													size="sm"
+													type="button"
+													variant="outline"
+												>
+													Reset to Auto
+												</Button>
+											</div>
+											<div className="mt-3 flex flex-col">{ollamaGenerationFields.map(renderConfigFieldRow)}</div>
+										</section>
+									) : null}
+									<CustomHeadersEditor headers={provider.headers} onChange={(headers) => onUpdate({ headers })} />
+									<OllamaRuntimeDiagnostics />
+								</div>
+							) : null}
+						</div>
+					</>
+				) : configFields.length > 0 ? (
 					<div className="flex flex-col">
 						{configFields.map(renderConfigFieldRow)}
 					</div>
@@ -1109,10 +1477,8 @@ export function ProviderDetailContent({
 								tabIndex={0}
 							>
 								{filteredModelList.map((model) => (
-									<div
-										className="group flex min-h-16 items-center gap-3 border-b px-4 py-3 hover:bg-surface-hover-lighter"
-										key={model.id}
-									>
+									<div key={model.id}>
+								<div className="group flex min-h-16 items-center gap-3 border-b px-4 py-3 hover:bg-surface-hover-lighter">
 										<div className="min-w-0 flex-1 font-mono">
 											<div className="flex min-w-0 items-center gap-1.5 px-1 text-sm text-foreground">
 												<span className="truncate">{model.name}</span>
@@ -1200,6 +1566,14 @@ export function ProviderDetailContent({
 										</div>
 
 										<Button
+											aria-label={selectedModelId === model.id ? `Close configuration for ${model.name}` : `Configure ${model.name}`}
+											className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
+											onClick={() => setModelEditorState(selectedModelId === model.id ? null : { providerId: provider.id, modelId: model.id })}
+											variant="ghost"
+										>
+											<ChevronRight className={cn("size-4 transition-transform", selectedModelId === model.id && "rotate-90")} />
+										</Button>
+										<Button
 											aria-label={
 												favoriteModelIds.has(model.id)
 													? `Unfavorite ${model.name}`
@@ -1221,6 +1595,14 @@ export function ProviderDetailContent({
 												)}
 											/>
 										</Button>
+									</div>
+									{isOllama && selectedModelId === model.id ? (
+										<ModelOverrideEditor
+											model={model}
+											onChange={(value) => updateModelOverride(model.id, value)}
+											override={provider.modelOverrides?.[model.id]}
+										/>
+									) : null}
 									</div>
 								))}
 							</section>

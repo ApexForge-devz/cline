@@ -1,7 +1,10 @@
 import {
 	DEFAULT_MAX_IMAGE_BASE64_BYTES,
 	DEFAULT_MAX_TOTAL_MEDIA_BYTES,
+	imageBase64LengthForDecodedBytes,
+	resolveMediaBudget,
 	SUPPORTED_IMAGE_MEDIA_TYPES,
+	type MediaBudgetOptions,
 } from "@cline/shared/browser";
 
 export function cloudImageAttachmentError(
@@ -71,4 +74,28 @@ export function isSupportedImageAttachment(
 		imageAttachmentMediaType(file) !== undefined &&
 		!isUnsupportedImageAttachment(file)
 	);
+}
+
+export function localOllamaImageAttachmentError(
+	files: Pick<File, "size">[],
+	budgetOptions?: MediaBudgetOptions,
+): string | undefined {
+	const budget = resolveMediaBudget(budgetOptions);
+	for (const file of files) {
+		const encodedBytes = imageBase64LengthForDecodedBytes(file.size);
+		if (encodedBytes > budget.maxImageEncodedBytes) {
+			return `Image rejected: ${(encodedBytes / (1024 * 1024)).toFixed(2)} MiB encoded payload exceeds the local Ollama limit of ${(budget.maxImageEncodedBytes / (1024 * 1024)).toFixed(2)} MiB.`;
+		}
+		if (file.size > budget.maxImageDecodedBytes) {
+			return `Image rejected: ${(file.size / (1024 * 1024)).toFixed(2)} MiB decoded image exceeds the local Ollama limit of ${(budget.maxImageDecodedBytes / (1024 * 1024)).toFixed(2)} MiB.`;
+		}
+	}
+	const totalEncodedBytes = files.reduce(
+		(total, file) => total + imageBase64LengthForDecodedBytes(file.size),
+		0,
+	);
+	if (totalEncodedBytes > budget.maxTotalMediaBytes) {
+		return `Images rejected: ${(totalEncodedBytes / (1024 * 1024)).toFixed(2)} MiB encoded payload exceeds the local Ollama total limit of ${(budget.maxTotalMediaBytes / (1024 * 1024)).toFixed(2)} MiB.`;
+	}
+	return undefined;
 }

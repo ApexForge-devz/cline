@@ -588,6 +588,11 @@ export function useChatSession(environmentId: string) {
 	// Names what the runtime is doing before the first output of a turn (in
 	// place of "Thinking..."); ephemeral, cleared when the turn moves on.
 	const [activityLabel, setActivityLabel] = useState<string | null>(null);
+	const [lastCompaction, setLastCompaction] = useState<{
+		reason: string;
+		at: number;
+		thresholdRatio?: number;
+	} | null>(null);
 	const [hydratedHistorySessionId, setHydratedHistorySessionId] = useState<
 		string | null
 	>(null);
@@ -698,6 +703,9 @@ export function useChatSession(environmentId: string) {
 
 	useEffect(() => {
 		activeSessionIdRef.current = sessionId;
+	}, [sessionId]);
+	useEffect(() => {
+		setLastCompaction(null);
 	}, [sessionId]);
 	useEffect(() => {
 		activeAssistantMessageIdRef.current = activeAssistantMessageId;
@@ -1996,6 +2004,35 @@ export function useChatSession(environmentId: string) {
 					}
 					// An imported session's history is summarized before the first
 					// model call; name that wait instead of showing "Thinking...".
+					const metadata =
+						parsed.metadata && typeof parsed.metadata === "object"
+							? (parsed.metadata as Record<string, unknown>)
+							: undefined;
+					const compactionReason =
+						metadata && typeof metadata.reason === "string"
+							? metadata.reason
+							: undefined;
+					const compactionPhase =
+						metadata && typeof metadata.phase === "string"
+							? metadata.phase
+							: undefined;
+					if (
+						(compactionReason === "auto_compaction" ||
+							compactionReason === "manual_compaction" ||
+							compactionReason === "overflow_recovery_compaction") &&
+						(compactionPhase === "finished" || compactionPhase === "completed")
+					) {
+						const thresholdRatio =
+							typeof metadata?.thresholdRatio === "number" &&
+							Number.isFinite(metadata.thresholdRatio)
+								? metadata.thresholdRatio
+								: undefined;
+						setLastCompaction({
+							reason: compactionReason,
+						at: Date.now(),
+						...(thresholdRatio !== undefined ? { thresholdRatio } : {}),
+					});
+					}
 					const summaryActivity = readImportedHistorySummaryActivity(
 						parsed.metadata,
 					);
@@ -4228,6 +4265,7 @@ export function useChatSession(environmentId: string) {
 			tokensOut,
 			cacheReadTokens,
 			totalCostUsd,
+			lastCompaction,
 			additions: diffSummary.additions,
 			deletions: diffSummary.deletions,
 		}),
@@ -4238,6 +4276,7 @@ export function useChatSession(environmentId: string) {
 			tokensOut,
 			cacheReadTokens,
 			totalCostUsd,
+			lastCompaction,
 			toolCalls,
 		],
 	);

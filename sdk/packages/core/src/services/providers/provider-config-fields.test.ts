@@ -24,6 +24,29 @@ describe("getProviderConfigFields", () => {
 		});
 		// The native-API vendor appends /api itself; the default is a bare host.
 		expect(result.fields.baseUrl?.defaultValue).toBe("http://localhost:11434");
+		expect(result.fields.timeout).toMatchObject({
+			label: "Request Timeout (ms)",
+			placeholder: "300000",
+		});
+		expect(result.fields.contextWindow).toMatchObject({
+			label: "Context Window (tokens)",
+			placeholder: "32768",
+		});
+		expect(result.fields.maxTokens).toMatchObject({
+			label: "Max Output Tokens",
+			placeholder: "Auto",
+		});
+		expect(result.fields["reasoning.enabled"]).toMatchObject({
+			label: "Thinking",
+			optional: true,
+		});
+		expect(result.fields["reasoning.effort"]).toMatchObject({
+			label: "Reasoning Effort",
+		});
+		expect(result.fields["reasoning.budgetTokens"]).toMatchObject({
+			label: "Thinking Budget (tokens)",
+			placeholder: "Auto",
+		});
 	});
 
 	it("returns api-key auth with apiKey + baseUrl for LM Studio", () => {

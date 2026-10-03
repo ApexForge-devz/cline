@@ -58,6 +58,57 @@ describe("prepareLocalRuntimeBootstrap", () => {
 		}
 	});
 
+	it("applies persisted Ollama model overrides and provider timeout to the runtime config", async () => {
+		const { prepareLocalRuntimeBootstrap } = await import(
+			"./local-runtime-bootstrap",
+		);
+		const bootstrap = await prepareLocalRuntimeBootstrap({
+			input: {
+				config: {
+					...createStartInput().config,
+					providerId: "ollama",
+					modelId: "vision-model",
+					thinking: undefined,
+				},
+			},
+			sessionId: "ollama-settings-session",
+			providerSettingsManager: createProviderSettingsManager({
+				provider: "ollama",
+				model: "vision-model",
+				contextWindow: 65_536,
+				maxTokens: 8192,
+				timeout: 600_000,
+				reasoning: { enabled: true, effort: "medium", budgetTokens: 4096 },
+				modelOverrides: {
+					"vision-model": {
+						contextWindow: 32_768,
+						maxTokens: 4096,
+						reasoning: { enabled: false, effort: "low", budgetTokens: 1024 },
+					},
+				},
+			}) as never,
+			onPluginEvent: () => {},
+			onTeamEvent: () => {},
+			createSpawnTool,
+			readSessionMetadata: async () => undefined,
+			writeSessionMetadata: async () => {},
+		});
+
+		expect(bootstrap.providerConfig).toMatchObject({
+			modelId: "vision-model",
+			maxInputTokens: 32_768,
+			maxOutputTokens: 4096,
+			timeoutMs: 600_000,
+			thinking: false,
+			reasoningEffort: "low",
+			thinkingBudgetTokens: 1024,
+		});
+		expect(bootstrap.config.maxTokensPerTurn).toBe(4096);
+		expect(bootstrap.config.thinking).toBe(false);
+		expect(bootstrap.config.reasoningEffort).toBe("low");
+		expect(bootstrap.config.thinkingBudgetTokens).toBe(1024);
+	});
+
 	it("applies hub model catalog defaults during local runtime bootstrap", async () => {
 		const { prepareLocalRuntimeBootstrap } = await import(
 			"./local-runtime-bootstrap"

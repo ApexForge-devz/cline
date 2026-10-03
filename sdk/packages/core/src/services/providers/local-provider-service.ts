@@ -1044,6 +1044,8 @@ export async function listLocalProviders(
 							persistedSettings,
 							info,
 						),
+						headers: persistedSettings?.headers,
+						modelOverrides: persistedSettings?.modelOverrides,
 						modelList,
 					},
 					rank: getPopularRank(info?.metadata),
@@ -1371,8 +1373,17 @@ async function saveLocalProviderSettingsUnlocked(
 		"client",
 		"routingProviderId",
 		"capabilities",
+		"mediaBudget",
 	] as const) {
 		if (Object.hasOwn(request, key)) next[key] = request[key];
+	}
+
+	if (Object.hasOwn(request, "modelOverrides")) {
+		if (request.modelOverrides && typeof request.modelOverrides === "object") {
+			next.modelOverrides = request.modelOverrides;
+		} else {
+			delete next.modelOverrides;
+		}
 	}
 
 	// Merged object fields
@@ -1380,6 +1391,7 @@ async function saveLocalProviderSettingsUnlocked(
 		"auth",
 		"headers",
 		"reasoning",
+		"ollamaGeneration",
 		"aws",
 		"gcp",
 		"azure",

@@ -459,12 +459,24 @@ const ollamaNativeOptionsRule: ProviderOptionRule = {
 			contextWindow > 0
 				? Math.floor(contextWindow)
 				: OLLAMA_DEFAULT_CONTEXT_WINDOW;
-		const bucketOptions = {
-			options: { num_ctx: numCtx },
-		};
-		return {
-			ollama: bucketOptions,
-		};
+		const generation = input.context.config.options?.ollamaGeneration;
+		const options: Record<string, unknown> = { num_ctx: numCtx };
+		if (generation && typeof generation === "object") {
+			const value = generation as Record<string, unknown>;
+			const copy = (key: string, nativeKey: string = key) => {
+				if (value[key] !== undefined) options[nativeKey] = value[key];
+			};
+			copy("temperature");
+			copy("topP", "top_p");
+			copy("topK", "top_k");
+			copy("minP", "min_p");
+			copy("repeatPenalty", "repeat_penalty");
+			copy("repeatLastN", "repeat_last_n");
+			copy("seed");
+			copy("stop");
+			copy("keepAlive", "keep_alive");
+		}
+		return { ollama: { options } };
 	},
 };
 

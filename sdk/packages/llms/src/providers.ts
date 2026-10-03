@@ -74,6 +74,7 @@ export {
 	registerHandler,
 } from "./providers/factory-registry";
 export type {
+	OllamaGenerationOptions,
 	ApiStreamChunk,
 	ContentBlock,
 	FileContent,

@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	clearLiveModelsCatalogCache,
 	clearPrivateModelsCatalogCache,
+	clearPublicModelsCatalogCache,
 	getLiveModelsCatalog,
+	getProviderConfig,
 	isPrivateModelCatalogProvider,
 	resolveProviderConfig,
 } from "./provider-defaults";
@@ -10,6 +12,8 @@ import {
 afterEach(() => {
 	clearLiveModelsCatalogCache();
 	clearPrivateModelsCatalogCache();
+	clearPublicModelsCatalogCache();
+	vi.useRealTimers();
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
 });
@@ -609,19 +613,430 @@ describe("resolveProviderConfig", () => {
 				`Bearer ${apiKey}:${tenant}`,
 			]);
 		}
-		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(fetchMock).toHaveBeenCalledTimes(6);
+		const showCalls = fetchMock.mock.calls.filter(([input]) =>
+			String(input).endsWith("/api/show"),
+		);
+		expect(showCalls).toHaveLength(3);
+		expect(
+			showCalls.map(([, init]) => {
+				const headers = new Headers(init?.headers);
+				return `${headers.get("authorization")}:${headers.get("x-tenant")}`;
+			}),
+		).toEqual(["Bearer first:a", "Bearer second:a", "Bearer second:b"]);
+	});
+
+	describe("Ollama model capability discovery", () => {
+		it("does not advertise model-specific tools at provider level", () => {
+			expect(getProviderConfig("ollama")?.capabilities).toBeUndefined();
+		});
+
+		it("derives model capabilities and limits from /api/show", async () => {
+			const showPayloads: Record<string, Record<string, unknown>> = {
+				"vision-tools-thinking": {
+					capabilities: ["completion", "tools", "vision", "thinking"],
+					thinking: { values: ["low", "high"] },
+					model_info: { "llama.context_length": 65_536 },
+				},
+				"text-only": { capabilities: ["completion"] },
+				"text-tools": { capabilities: ["completion", "tools"] },
+				"vision-only": { capabilities: ["completion", "vision"] },
+				"vision-thinking": {
+					capabilities: ["completion", "vision", "thinking"],
+				},
+				embedding: { capabilities: ["embedding"] },
+			};
+			const tags = [
+				{ name: "vision-tools-thinking", digest: "sha256:a" },
+				{ name: "text-only", digest: "sha256:b" },
+				{ model: "text-tools", digest: "sha256:c" },
+				{ name: "vision-only", digest: "sha256:d" },
+				{ name: "vision-thinking", digest: "sha256:e" },
+				{ name: "embedding", digest: "sha256:f" },
+			];
+			const fetchMock = vi.fn(
+				async (input: RequestInfo | URL, init?: RequestInit) => {
+					const url = String(input);
+					if (url.endsWith("/api/tags")) {
+						return new Response(JSON.stringify({ models: tags }), { status: 200 });
+					}
+					const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
+					return new Response(
+						JSON.stringify(showPayloads[body.model ?? ""] ?? {}),
+						{ status: 200 },
+					);
+				},
+			);
+			vi.stubGlobal("fetch", fetchMock);
+
+			const resolved = await resolveProviderConfig(
+				"ollama",
+				{ failOnError: true, cacheTtlMs: 0 },
+				{
+					providerId: "ollama",
+					modelId: "",
+					baseUrl: "http://localhost:11434/v1",
+				},
+			);
+
+			expect(fetchMock).toHaveBeenCalledTimes(7);
+			const firstShowCall = fetchMock.mock.calls.find(([input]) =>
+				String(input).endsWith("/api/show"),
+			);
+			expect(firstShowCall?.[1]?.method).toBe("POST");
+			expect(
+				new Headers(firstShowCall?.[1]?.headers).get("content-type"),
+			).toBe("application/json");
+			expect(
+				JSON.parse(String(firstShowCall?.[1]?.body ?? "{}")),
+			).toEqual(expect.objectContaining({ model: expect.any(String) }));
+			expect(
+				resolved?.knownModels?.["vision-tools-thinking"]?.capabilities,
+			).toEqual(["streaming", "tools", "images", "reasoning"]);
+			expect(
+				resolved?.knownModels?.["vision-tools-thinking"]?.thinkingConfig,
+			).toEqual({ thinkingLevel: "high" });
+			expect(
+				resolved?.knownModels?.["vision-tools-thinking"]?.modalities?.input,
+			).toEqual(["text", "image"]);
+			expect(
+				resolved?.knownModels?.["vision-tools-thinking"]?.contextWindow,
+			).toBe(65_536);
+			expect(resolved?.knownModels?.["text-only"]?.capabilities).toEqual(["streaming"]);
+			expect(resolved?.knownModels?.["text-tools"]?.capabilities).toEqual([
+				"streaming",
+				"tools",
+			]);
+			expect(resolved?.knownModels?.["vision-only"]?.capabilities).toEqual([
+				"streaming",
+				"images",
+			]);
+			expect(resolved?.knownModels?.["vision-thinking"]?.capabilities).toEqual([
+				"streaming",
+				"images",
+				"reasoning",
+			]);
+			expect(resolved?.knownModels?.embedding).toBeUndefined();
+		});
+
+		it("does not trust incomplete /api/tags capabilities", async () => {
+			const fetchMock = vi
+				.fn()
+				.mockResolvedValueOnce(
+					new Response(
+						JSON.stringify({
+							models: [
+								{
+									name: "model",
+									digest: "sha256:model",
+									capabilities: ["completion"],
+								},
+							],
+						}),
+						{ status: 200 },
+					),
+				)
+				.mockResolvedValueOnce(
+					new Response(
+						JSON.stringify({
+							capabilities: ["completion", "vision", "tools"],
+						}),
+						{ status: 200 },
+					),
+				);
+			vi.stubGlobal("fetch", fetchMock);
+
+			const resolved = await resolveProviderConfig(
+				"ollama",
+				{ failOnError: true, cacheTtlMs: 0 },
+				{
+					providerId: "ollama",
+					modelId: "",
+					baseUrl: "http://localhost:11434/v1",
+				},
+			);
+
+			expect(fetchMock).toHaveBeenCalledTimes(2);
+			expect(resolved?.knownModels?.model?.capabilities).toEqual([
+				"streaming",
+				"tools",
+				"images",
+			]);
+		});
+
+		it("handles malformed /api/show JSON without losing the installed model", async () => {
+			const fetchMock = vi
+				.fn()
+				.mockResolvedValueOnce(
+					new Response(
+						JSON.stringify({
+							models: [{ name: "malformed-model", digest: "sha256:bad-json" }],
+						}),
+						{ status: 200 },
+					),
+				)
+				.mockResolvedValueOnce(new Response("not-json", { status: 200 }));
+			vi.stubGlobal("fetch", fetchMock);
+
+			const resolved = await resolveProviderConfig(
+				"ollama",
+				{ failOnError: true, cacheTtlMs: 0 },
+				{ providerId: "ollama", modelId: "", baseUrl: "http://localhost:11434" },
+			);
+
+			expect(
+				resolved?.knownModels?.["malformed-model"]?.capabilities,
+			).toBeUndefined();
+		});
+
+		it("applies the per-model /api/show timeout without failing the whole catalog", async () => {
+			vi.useFakeTimers();
+			const fetchMock = vi.fn(
+				async (input: RequestInfo | URL, init?: RequestInit) => {
+					const url = String(input);
+					if (url.endsWith("/api/tags")) {
+						return new Response(
+							JSON.stringify({
+								models: [{ name: "slow-model", digest: "sha256:slow" }],
+							}),
+							{ status: 200 },
+						);
+					}
+					return new Promise<Response>((_resolve, reject) => {
+						init?.signal?.addEventListener(
+							"abort",
+							() => reject(init.signal?.reason),
+							{ once: true },
+						);
+					});
+				},
+			);
+			vi.stubGlobal("fetch", fetchMock);
+
+			const pending = resolveProviderConfig(
+				"ollama",
+				{ failOnError: true, cacheTtlMs: 0 },
+				{ providerId: "ollama", modelId: "", baseUrl: "http://localhost:11434" },
+			);
+			await vi.advanceTimersByTimeAsync(5_001);
+			const resolved = await pending;
+
+			expect(
+				resolved?.knownModels?.["slow-model"]?.capabilities,
+			).toBeUndefined();
+		});
+
+		it("keeps unknown capabilities unknown when /api/show is unavailable", async () => {
+			const fetchMock = vi
+				.fn()
+				.mockResolvedValueOnce(
+					new Response(
+						JSON.stringify({
+							models: [{ name: "unknown-model", digest: "sha256:unknown" }],
+						}),
+						{ status: 200 },
+					),
+				)
+				.mockResolvedValueOnce(new Response("gateway timeout", { status: 504 }));
+			vi.stubGlobal("fetch", fetchMock);
+
+			const resolved = await resolveProviderConfig(
+				"ollama",
+				{ failOnError: true, cacheTtlMs: 0 },
+				{ providerId: "ollama", modelId: "", baseUrl: "http://localhost:11434" },
+			);
+
+			expect(resolved?.knownModels?.["unknown-model"]).toEqual(
+				expect.objectContaining({ id: "unknown-model", name: "unknown-model" }),
+			);
+			expect(
+				resolved?.knownModels?.["unknown-model"]?.capabilities,
+			).toBeUndefined();
+			expect(
+				resolved?.knownModels?.["unknown-model"]?.modalities,
+			).toBeUndefined();
+		});
+
+		it("allows one model metadata request to fail without losing other models", async () => {
+			const tags = [
+				{ name: "good-vision", digest: "sha256:good" },
+				{ name: "bad-model", digest: "sha256:bad" },
+				{ name: "good-tools", digest: "sha256:tools" },
+			];
+			const fetchMock = vi.fn(
+				async (input: RequestInfo | URL, init?: RequestInit) => {
+					const url = String(input);
+					if (url.endsWith("/api/tags")) {
+						return new Response(JSON.stringify({ models: tags }), { status: 200 });
+					}
+					const body = JSON.parse(String(init?.body ?? "{}")) as { model?: string };
+					if (body.model === "bad-model") {
+						return new Response("broken model", { status: 500 });
+					}
+					return new Response(
+						JSON.stringify({
+							capabilities:
+								body.model === "good-vision"
+									? ["completion", "vision", "thinking"]
+									: ["completion", "tools"],
+						}),
+						{ status: 200 },
+					);
+				},
+			);
+			vi.stubGlobal("fetch", fetchMock);
+
+			const resolved = await resolveProviderConfig(
+				"ollama",
+				{ failOnError: true, cacheTtlMs: 0 },
+				{ providerId: "ollama", modelId: "", baseUrl: "http://localhost:11434" },
+			);
+
+			expect(resolved?.knownModels?.["good-vision"]?.capabilities).toEqual([
+				"streaming",
+				"images",
+				"reasoning",
+			]);
+			expect(resolved?.knownModels?.["good-tools"]?.capabilities).toEqual([
+				"streaming",
+				"tools",
+			]);
+			expect(
+				resolved?.knownModels?.["bad-model"]?.capabilities,
+			).toBeUndefined();
+		});
+
+		it("limits concurrent /api/show requests", async () => {
+			const tags = Array.from({ length: 9 }, (_, index) => ({
+				name: `model-${index}`,
+				digest: `sha256:${index}`,
+			}));
+			let active = 0;
+			let maxActive = 0;
+			const fetchMock = vi.fn(
+				async (input: RequestInfo | URL) => {
+					const url = String(input);
+					if (url.endsWith("/api/tags")) {
+						return new Response(JSON.stringify({ models: tags }), { status: 200 });
+					}
+					active += 1;
+					maxActive = Math.max(maxActive, active);
+					await new Promise((resolve) => setTimeout(resolve, 5));
+					active -= 1;
+					return new Response(
+						JSON.stringify({ capabilities: ["completion"] }),
+						{ status: 200 },
+					);
+				},
+			);
+			vi.stubGlobal("fetch", fetchMock);
+
+			await resolveProviderConfig(
+				"ollama",
+				{ failOnError: true, cacheTtlMs: 0 },
+				{ providerId: "ollama", modelId: "", baseUrl: "http://localhost:11434" },
+			);
+
+			expect(maxActive).toBeLessThanOrEqual(6);
+			expect(maxActive).toBeGreaterThan(1);
+		});
+
+		it("preserves explicit model overrides over discovered metadata", async () => {
+			const fetchMock = vi
+				.fn()
+				.mockResolvedValueOnce(
+					new Response(
+						JSON.stringify({
+							models: [{ name: "model", digest: "sha256:model" }],
+						}),
+						{ status: 200 },
+					),
+				)
+				.mockResolvedValueOnce(
+					new Response(
+						JSON.stringify({ capabilities: ["completion", "vision"] }),
+						{ status: 200 },
+					),
+				);
+			vi.stubGlobal("fetch", fetchMock);
+
+			const resolved = await resolveProviderConfig(
+				"ollama",
+				{ failOnError: true, cacheTtlMs: 0 },
+				{
+					providerId: "ollama",
+					modelId: "model",
+					baseUrl: "http://localhost:11434",
+					knownModels: {
+						model: { id: "model", capabilities: ["streaming", "tools"] },
+					},
+				},
+			);
+
+			expect(resolved?.knownModels?.model?.capabilities).toEqual([
+				"streaming",
+				"tools",
+			]);
+		});
+
+		it("reuses cached model details until the installed digest changes", async () => {
+			let digest = "sha256:a";
+			let capabilities = ["completion"];
+			const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+				const url = String(input);
+				if (url.endsWith("/api/tags")) {
+					return new Response(
+						JSON.stringify({ models: [{ name: "model", digest }] }),
+						{ status: 200 },
+					);
+				}
+				return new Response(JSON.stringify({ capabilities }), { status: 200 });
+			});
+			vi.stubGlobal("fetch", fetchMock);
+
+			const config = {
+				providerId: "ollama",
+				modelId: "",
+				baseUrl: "http://localhost:11434/v1",
+			} as const;
+			const catalog = { failOnError: true, cacheTtlMs: 0 } as const;
+
+			await resolveProviderConfig("ollama", catalog, config);
+			await resolveProviderConfig("ollama", catalog, config);
+			expect(fetchMock).toHaveBeenCalledTimes(3);
+
+			digest = "sha256:b";
+			capabilities = ["completion", "vision"];
+			const resolved = await resolveProviderConfig("ollama", catalog, config);
+			expect(fetchMock).toHaveBeenCalledTimes(5);
+			expect(resolved?.knownModels?.model?.capabilities).toEqual([
+				"streaming",
+				"images",
+			]);
+		});
 	});
 
 	it("uses built-in modelsSourceUrl for keyless local provider models", async () => {
-		const fetchMock = vi.fn(async () => {
-			return new Response(
-				JSON.stringify({ models: [{ name: "local-llama" }] }),
-				{
-					status: 200,
-					headers: { "content-type": "application/json" },
-				},
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({ models: [{ name: "local-llama" }] }),
+					{
+						status: 200,
+						headers: { "content-type": "application/json" },
+					},
+				),
+			)
+			.mockResolvedValueOnce(
+				new Response(
+					JSON.stringify({ capabilities: ["completion", "tools"] }),
+					{
+						status: 200,
+						headers: { "content-type": "application/json" },
+					},
+				),
 			);
-		});
 		vi.stubGlobal("fetch", fetchMock);
 
 		const resolved = await resolveProviderConfig(
@@ -634,11 +1049,17 @@ describe("resolveProviderConfig", () => {
 			},
 		);
 
-		expect(fetchMock).toHaveBeenCalledWith(
+		expect(fetchMock.mock.calls[0][0]).toBe(
 			"http://tailscale-host:11434/api/tags",
-			{ method: "GET", signal: expect.any(AbortSignal) },
+		);
+		expect(fetchMock.mock.calls[1][0]).toBe(
+			"http://tailscale-host:11434/api/show",
 		);
 		expect(Object.keys(resolved?.knownModels ?? {})).toEqual(["local-llama"]);
+		expect(resolved?.knownModels?.["local-llama"]?.capabilities).toEqual([
+			"streaming",
+			"tools",
+		]);
 	});
 
 	it("loads Poolside models from the authenticated models endpoint", async () => {

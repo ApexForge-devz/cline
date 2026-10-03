@@ -28,8 +28,41 @@ export const ChatSessionConfigSchema = z.object({
 	systemPrompt: z.string().optional(),
 	rules: z.string().optional(),
 	maxIterations: z.number().int().positive().optional(),
+	maxParallelToolCalls: z.number().int().positive().optional(),
+	maxTokensPerTurn: z.number().positive().optional(),
+	maxConsecutiveMistakes: z.number().int().positive().optional(),
+	loopDetection: z
+		.union([
+			z.literal(false),
+			z.object({
+				softThreshold: z.number().int().positive().optional(),
+				hardThreshold: z.number().int().positive().optional(),
+			}),
+		])
+		.optional(),
+	toolPolicies: z
+		.record(
+			z.string(),
+			z.object({ enabled: z.boolean().optional(), autoApprove: z.boolean().optional() }),
+		)
+		.optional(),
 	thinking: z.boolean().optional(),
-	reasoningEffort: z.enum(["low", "medium", "high", "xhigh"]).optional(),
+	reasoningEffort: z.enum(["minimal", "low", "medium", "high", "xhigh", "max"]).optional(),
+	thinkingBudgetTokens: z.number().int().positive().optional(),
+	providerConfig: z
+		.object({
+			timeoutMs: z.number().int().positive().optional(),
+			maxInputTokens: z.number().int().positive().optional(),
+			maxOutputTokens: z.number().int().positive().optional(),
+			mediaBudget: z.object({
+				maxImageEncodedBytes: z.number().int().positive(),
+				maxImageDecodedBytes: z.number().int().positive(),
+				maxTotalMediaBytes: z.number().int().positive(),
+			}).strict().optional(),
+			headers: z.record(z.string(), z.string()).optional(),
+		})
+		.strict()
+		.optional(),
 	enableTools: z.boolean(),
 	autoApproveTools: z.boolean().optional(),
 	missionStepInterval: z.number().int().positive().optional(),

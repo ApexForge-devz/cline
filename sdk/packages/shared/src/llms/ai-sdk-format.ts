@@ -3,7 +3,10 @@ import {
 	createMediaBudgetState,
 	DEFAULT_MAX_IMAGE_DECODED_BYTES,
 	DEFAULT_MAX_IMAGE_ENCODED_BYTES,
+	resolveMediaBudget,
 	type GeneratedMedia,
+	type MediaBudgetOptions,
+	type ResolvedMediaBudget,
 	type GeneratedMediaModality,
 	IMAGE_OMITTED_PLACEHOLDER,
 	IMAGE_UNSUPPORTED_PLACEHOLDER,
@@ -168,7 +171,9 @@ function imageOmittedTextPart(): { type: "text"; text: string } {
 	return { type: "text", text: IMAGE_OMITTED_PLACEHOLDER };
 }
 
-function reserveRemoteImageUrlBudget(state: MediaBudgetState): boolean {
+function reserveRemoteImageUrlBudget(
+	state: MediaBudgetState,
+): boolean {
 	// Remote URL byte size is unknown at formatting time, so charge the
 	// conservative per-image cap instead of letting URL media count as free.
 	return (
@@ -201,13 +206,14 @@ function parseUrlProtocol(value: string): string | undefined {
 function toToolResultImagePart(
 	image: AiSdkImageContentBlock,
 	state: MediaBudgetState,
+	budget: ResolvedMediaBudget,
 ): ToolResultImagePart | { type: "text"; text: string } {
 	const validation = validateAndReserveImageMedia(
 		image.mediaType,
 		image.data,
 		{
-			maxImageEncodedBytes: DEFAULT_MAX_IMAGE_ENCODED_BYTES,
-			maxImageDecodedBytes: DEFAULT_MAX_IMAGE_DECODED_BYTES,
+			maxImageEncodedBytes: budget.maxImageEncodedBytes,
+			maxImageDecodedBytes: budget.maxImageDecodedBytes,
 		},
 		state,
 	);
@@ -250,6 +256,7 @@ function userMediaPart(
 function toUserImagePart(
 	image: Extract<AiSdkFormatterPart, { type: "image" }>,
 	state: MediaBudgetState,
+	budget: ResolvedMediaBudget,
 ): AiSdkMessagePart {
 	if (image.image instanceof URL) {
 		if (image.image.protocol === "data:") {
@@ -257,8 +264,8 @@ function toUserImagePart(
 				image.mediaType,
 				image.image.href,
 				{
-					maxImageEncodedBytes: DEFAULT_MAX_IMAGE_ENCODED_BYTES,
-					maxImageDecodedBytes: DEFAULT_MAX_IMAGE_DECODED_BYTES,
+					maxImageEncodedBytes: budget.maxImageEncodedBytes,
+					maxImageDecodedBytes: budget.maxImageDecodedBytes,
 				},
 				state,
 			);
@@ -293,8 +300,8 @@ function toUserImagePart(
 			image.mediaType ?? (isDataUrl ? undefined : "image/png"),
 			image.image,
 			{
-				maxImageEncodedBytes: DEFAULT_MAX_IMAGE_ENCODED_BYTES,
-				maxImageDecodedBytes: DEFAULT_MAX_IMAGE_DECODED_BYTES,
+				maxImageEncodedBytes: budget.maxImageEncodedBytes,
+				maxImageDecodedBytes: budget.maxImageDecodedBytes,
 			},
 			state,
 		);
@@ -349,6 +356,7 @@ function toUserGeneratedMediaPart(
 	media: GeneratedMedia,
 	state: MediaBudgetState,
 	supportedInputModalities: readonly string[] | undefined,
+	budget: ResolvedMediaBudget,
 ): AiSdkMessagePart {
 	if (!supportsGeneratedMediaInput(media, supportedInputModalities)) {
 		return generatedMediaUnavailableText(media);
@@ -366,6 +374,7 @@ function toUserGeneratedMediaPart(
 				mediaType: media.mediaType,
 			},
 			state,
+			budget,
 		);
 	}
 
@@ -410,6 +419,7 @@ function stripImagesFromOutput(
 	images: AiSdkImageContentBlock[],
 	state: MediaBudgetState,
 	options: StripImagesOptions,
+	budget: ResolvedMediaBudget,
 ): StripImagesResult {
 	const { hoistImages, inlineImagePlaceholder } = options;
 	if (value == null || typeof value !== "object") {
@@ -439,7 +449,7 @@ function stripImagesFromOutput(
 						data: obj.data,
 						mediaType: obj.mediaType,
 					} satisfies AiSdkImageContentBlock;
-					const part = toToolResultImagePart(image, state);
+					const part = toToolResultImagePart(image, state, budget);
 					if (part.type === "file") {
 						images.push({
 							type: "image",
@@ -465,7 +475,7 @@ function stripImagesFromOutput(
 					continue;
 				}
 			}
-			const stripped = stripImagesFromOutput(item, images, state, options);
+			const stripped = stripImagesFromOutput(item, images, state, options, budget);
 			out.push(stripped.value);
 			changed ||= stripped.changed;
 			mediaChanged ||= stripped.mediaChanged;
@@ -488,7 +498,7 @@ function stripImagesFromOutput(
 				data: obj.data,
 				mediaType: obj.mediaType,
 			} satisfies AiSdkImageContentBlock;
-			const part = toToolResultImagePart(image, state);
+			const part = toToolResultImagePart(image, state, budget);
 			if (part.type === "file") {
 				images.push({
 					type: "image",
@@ -514,7 +524,7 @@ function stripImagesFromOutput(
 	let changed = false;
 	let mediaChanged = false;
 	for (const [k, v] of Object.entries(obj)) {
-		const stripped = stripImagesFromOutput(v, images, state, options);
+		const stripped = stripImagesFromOutput(v, images, state, options, budget);
 		out[k] = stripped.value;
 		changed ||= stripped.changed;
 		mediaChanged ||= stripped.mediaChanged;
@@ -545,9 +555,10 @@ export function toAiSdkToolResultOutput(
 	output: unknown,
 	isError = false,
 	mediaState: MediaBudgetState = createMediaBudgetState(),
-	options?: { supportsImages?: boolean },
+	options?: { supportsImages?: boolean; mediaBudget?: MediaBudgetOptions },
 ): Record<string, unknown> {
 	const supportsImages = options?.supportsImages ?? true;
+	const mediaBudget = resolveMediaBudget(options?.mediaBudget);
 	if (typeof output === "string") {
 		return {
 			type: isError ? "error-text" : "text",
@@ -570,7 +581,7 @@ export function toAiSdkToolResultOutput(
 			value: output.map((block) =>
 				block.type === "image"
 					? supportsImages
-						? toToolResultImagePart(block, mediaState)
+						? toToolResultImagePart(block, mediaState, mediaBudget)
 						: { type: "text", text: IMAGE_UNSUPPORTED_PLACEHOLDER }
 					: { type: "text", text: sanitizeSurrogates(block.text) },
 			),
@@ -594,7 +605,7 @@ export function toAiSdkToolResultOutput(
 			inlineImagePlaceholder: supportsImages
 				? IMAGE_OMITTED_PLACEHOLDER
 				: IMAGE_UNSUPPORTED_PLACEHOLDER,
-		});
+		}, mediaBudget);
 		if (!isError && images.length > 0) {
 			const headerText =
 				typeof stripped.value === "string"
@@ -650,10 +661,12 @@ export function formatMessagesForAiSdk(
 		 * time only — stored conversation history is never mutated.
 		 */
 		supportedInputModalities?: readonly string[];
+		mediaBudget?: MediaBudgetOptions;
 	},
 ): AiSdkMessage[] {
 	const toolCallArgKey = options?.assistantToolCallArgKey ?? "input";
 	const supportedInputModalities = options?.supportedInputModalities;
+	const mediaBudget = resolveMediaBudget(options?.mediaBudget);
 	const supportsImages =
 		!supportedInputModalities || supportedInputModalities.includes("image");
 	const result: AiSdkMessage[] = [];
@@ -667,12 +680,13 @@ export function formatMessagesForAiSdk(
 		return pending.map((part) =>
 			part.type === "image"
 				? supportsImages
-					? toUserImagePart(part, mediaState)
+					? toUserImagePart(part, mediaState, mediaBudget)
 					: { type: "text", text: IMAGE_UNSUPPORTED_PLACEHOLDER }
 				: toUserGeneratedMediaPart(
 						part.media,
 						mediaState,
 						supportedInputModalities,
+						mediaBudget,
 					),
 		);
 	};
@@ -774,7 +788,7 @@ export function formatMessagesForAiSdk(
 					} else {
 						messageParts.push(
 							supportsImages
-								? toUserImagePart(part, mediaState)
+								? toUserImagePart(part, mediaState, mediaBudget)
 								: { type: "text", text: IMAGE_UNSUPPORTED_PLACEHOLDER },
 						);
 					}
@@ -792,7 +806,8 @@ export function formatMessagesForAiSdk(
 								part.media,
 								mediaState,
 								supportedInputModalities,
-							),
+							mediaBudget,
+						),
 						);
 					}
 					break;
@@ -827,7 +842,7 @@ export function formatMessagesForAiSdk(
 							part.output,
 							part.isError ?? false,
 							mediaState,
-							{ supportsImages },
+							{ supportsImages, mediaBudget },
 						),
 					});
 					break;

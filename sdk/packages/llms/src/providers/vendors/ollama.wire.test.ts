@@ -68,10 +68,12 @@ async function streamThroughVendor({
 	responseLines,
 	prompt,
 	providerOptions,
+	tools,
 }: {
 	responseLines: Array<Record<string, unknown>>;
 	prompt: LanguageModelV4Prompt;
 	providerOptions?: LanguageModelV4CallOptions["providerOptions"];
+	tools?: LanguageModelV4CallOptions["tools"];
 }): Promise<WireResult> {
 	const requests: OllamaChatRequest[] = [];
 	const fetchStub = (async (_input, init) => {
@@ -99,6 +101,7 @@ async function streamThroughVendor({
 	const result = await model.doStream({
 		prompt,
 		...(providerOptions ? { providerOptions } : {}),
+		...(tools ? { tools } : {}),
 	} as LanguageModelV4CallOptions);
 
 	const parts: LanguageModelV4StreamPart[] = [];
@@ -177,6 +180,62 @@ describe("ollama wire contract (real provider package)", () => {
 		// Ollama declares `Message.content` as a string; `[]` is off-contract.
 		expect(message.content).toBe("");
 		expect(message.images).toHaveLength(1);
+	});
+
+	it("sends structured native tool definitions without stringifying schemas", async () => {
+		const { requests } = await streamThroughVendor({
+			responseLines: [textChunk("done"), DONE_CHUNK],
+			prompt: userText("inspect the scene"),
+			tools: [
+				{
+					type: "function",
+					name: "get_scene",
+					description: "Get scene information",
+					inputSchema: {
+						type: "object",
+						properties: { includeChildren: { type: "boolean" } },
+						required: [],
+					},
+				},
+			],
+		});
+
+		expect(requests[0].tools).toEqual([
+			{
+				type: "function",
+				function: expect.objectContaining({
+					name: "get_scene",
+					description: "Get scene information",
+				}),
+			},
+		]);
+		expect(JSON.stringify(requests[0].tools)).toContain("includeChildren");
+	});
+
+	it("parses multiple native tool calls from one Ollama response", async () => {
+		const { parts } = await streamThroughVendor({
+			responseLines: [
+				{
+					model: "test-model",
+					created_at: "2024-01-01T00:00:00Z",
+					done: false,
+					message: {
+						role: "assistant",
+						tool_calls: [
+							{ function: { name: "read_scene", arguments: { path: "Main" } } },
+							{ function: { name: "find_object", arguments: { name: "Player" } } },
+						],
+					},
+				},
+				DONE_CHUNK,
+			],
+			prompt: userText("inspect the scene"),
+		});
+
+		const toolCalls = parts.filter((part) => part.type === "tool-call");
+		expect(toolCalls).toHaveLength(2);
+		expect((toolCalls[0] as { toolName: string }).toolName).toBe("read_scene");
+		expect((toolCalls[1] as { toolName: string }).toolName).toBe("find_object");
 	});
 
 	it("includes tool_name on tool result messages", async () => {

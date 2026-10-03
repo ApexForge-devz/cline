@@ -498,6 +498,7 @@ function buildGatewayConfig(config: ProviderConfig) {
 		baseUrl: config.baseUrl,
 		headers: config.headers,
 		timeoutMs: config.timeoutMs,
+		mediaBudget: config.mediaBudget,
 		fetch: config.fetch,
 		defaultModelId: config.modelId,
 		models: buildGatewayModels(providerId, config),

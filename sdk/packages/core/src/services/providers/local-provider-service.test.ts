@@ -2467,7 +2467,45 @@ describe("saveLocalProviderSettings", () => {
 		expect(settings?.timeout).toBe(30_000);
 	});
 
-	it("disabling a last-used provider also clears lastUsedProvider", async () => {
+	it("persists provider headers and per-model overrides without replacing unrelated settings", async () => {
+		await saveLocalProviderSettings(manager, {
+			providerId: "test-provider",
+			baseUrl: "https://example.invalid/v2",
+			maxTokens: 8192,
+			headers: { "X-Test": "one" },
+			modelOverrides: {
+				"m1": { contextWindow: 32768, capabilities: { vision: true } },
+			},
+		});
+
+		const first = manager.getProviderSettings("test-provider");
+		expect(first?.baseUrl).toBe("https://example.invalid/v2");
+		expect(first?.maxTokens).toBe(8192);
+		expect(first?.headers).toEqual({ "X-Test": "one" });
+		expect(first?.modelOverrides).toEqual({
+			"m1": { contextWindow: 32768, capabilities: { vision: true } },
+		});
+
+		await saveLocalProviderSettings(manager, {
+			providerId: "test-provider",
+			headers: { "X-Test": "two" },
+			modelOverrides: {
+				"m1": { contextWindow: 16384, capabilities: { vision: false } },
+				"m2": { maxTokens: 2048 },
+			},
+		});
+
+		const second = manager.getProviderSettings("test-provider");
+		expect(second?.baseUrl).toBe("https://example.invalid/v2");
+		expect(second?.maxTokens).toBe(8192);
+		expect(second?.headers).toEqual({ "X-Test": "two" });
+		expect(second?.modelOverrides).toEqual({
+			"m1": { contextWindow: 16384, capabilities: { vision: false } },
+			"m2": { maxTokens: 2048 },
+		});
+	});
+
+		it("disabling a last-used provider also clears lastUsedProvider", async () => {
 		// Set test-provider as last used
 		manager.saveProviderSettings(
 			{ provider: "test-provider", model: "m1" },

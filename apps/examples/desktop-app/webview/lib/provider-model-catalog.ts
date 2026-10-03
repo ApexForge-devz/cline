@@ -282,7 +282,13 @@ export function invalidateProviderCatalogCache(): void {
 // paint on a full catalog fetch. The last successful load is kept here (not
 // in the pane module) so credential changes invalidate it with the cache.
 export type ProviderCatalogSnapshot = {
-	credentials: Record<string, { apiKey: string; auth?: ProviderAuthInfo }>;
+	credentials: Record<string, {
+		apiKey: string;
+		auth?: ProviderAuthInfo;
+		configValues?: Provider["configValues"];
+		headers?: Provider["headers"];
+		modelOverrides?: Provider["modelOverrides"];
+	}>;
 	contextWindows: Record<string, Record<string, number>>;
 };
 

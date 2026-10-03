@@ -4,6 +4,7 @@ import type {
 	ModelOperationMode,
 	ModelToolName,
 	ProviderAuthInfo,
+	ProviderModelSettingsOverrides,
 } from "@cline/shared/browser";
 
 /** Which tier of the Cline recommended-models feed featured a model. */
@@ -88,12 +89,16 @@ export interface Provider {
 	baseUrlDescription?: string;
 	configFields?: ProviderConfigField[];
 	configValues?: Record<string, ProviderConfigFieldPrimitive>;
+	headers?: Record<string, string>;
+	modelOverrides?: ProviderModelSettingsOverrides;
 	modelList?: ProviderModel[];
 }
 
 export interface ProviderSettingsUpdate {
 	apiKey?: string;
 	baseUrl?: string;
+	headers?: Record<string, string>;
+	modelOverrides?: ProviderModelSettingsOverrides;
 	configValues?: Record<string, ProviderConfigFieldPrimitive>;
 }
 

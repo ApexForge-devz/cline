@@ -1,0 +1,152 @@
+---
+title: "Ollama"
+sidebarTitle: "Ollama"
+description: "Configure Cline Desktop for native local Ollama inference."
+---
+
+Cline uses Ollama's native `/api/chat` interface for local inference. The Desktop Ollama provider discovers installed models automatically and reads per-model metadata from Ollama rather than relying on a model-name allowlist.
+
+## Connection
+
+Use the Ollama server URL for the machine running the local daemon. The default is:
+
+```text
+http://localhost:11434
+```
+
+An API key is optional for a normal local Ollama server.
+
+### Request timeout
+
+Cline treats the Ollama request timeout as a response-start timeout. The local provider default is 5 minutes, and an explicit configured value is preserved through the Desktop session into the native request.
+
+This matters for cold model loads and long prompt/prefill operations, where the first response chunk can legitimately take longer than a cloud-oriented default.
+
+## Model discovery and capabilities
+
+The installed-model list comes from Ollama's `/api/tags` endpoint. Cline then enriches changed models with `/api/show` metadata and caches the result by model identity/digest.
+
+The model picker resolves capabilities per model:
+
+| Capability | Source |
+| --- | --- |
+| Vision | Ollama `capabilities: vision` |
+| Tool calling | Ollama `capabilities: tools` |
+| Thinking/reasoning | Ollama thinking metadata |
+| Context | Ollama model metadata when available |
+| Chat/completion | Ollama `capabilities: completion` |
+
+Embedding-only models are not presented as ordinary coding/chat models. When model metadata is incomplete, Cline keeps the capability state unknown instead of silently treating missing information as a negative capability.
+
+## Context window
+
+Set **Context Window (tokens)** under the Ollama provider settings when you need an explicit runtime budget. The configured value is used for Ollama `options.num_ctx` and is also used by Cline's context/compaction budgeting.
+
+The provider uses a safe 32,768-token fallback when no explicit context is configured. The model's advertised maximum is not automatically treated as the recommended local runtime value.
+
+On limited-VRAM hardware, a smaller context can materially reduce KV-cache pressure and CPU offload.
+
+## Thinking and reasoning
+
+The Ollama provider supports:
+
+- **Thinking**: Enabled, Disabled, or automatic behavior through model metadata.
+- **Reasoning Effort**: Cline's normalized reasoning-effort setting where supported.
+- **Thinking Budget**: an explicit token budget where supported.
+
+Leave values unset to retain model/provider defaults when those defaults are known.
+
+## Vision and media
+
+Local Ollama image handling uses a provider-aware media policy rather than the cloud-oriented encoded-image budget.
+
+The Desktop attachment path and the shared media validator use the same local policy. PNG, JPEG, GIF, and WebP are handled through the normal image pipeline. Unsupported formats are rejected explicitly rather than being silently passed through.
+
+For oversized images, Cline reports the configured encoded/decoded/aggregate limit instead of replacing the attachment with a generic omitted-media placeholder.
+
+Images returned through MCP/tool results use the same Ollama image path, including multiple images and image-only turns.
+
+## Tool calling and MCP
+
+Cline preserves the native Ollama tool contract:
+
+```text
+model capability
+    -> tool schema
+    -> native /api/chat request
+    -> native tool_calls
+    -> tool execution
+    -> structured tool result
+    -> next model turn
+```
+
+The Desktop local-agent settings include a global tool-approval policy and a maximum parallel-tool-call limit. Per-model tool capability overrides can explicitly enable or disable tool calling when required for a custom local model configuration.
+
+## Advanced generation
+
+The Ollama provider exposes native generation controls under **Advanced local controls → Generation**. Supported first-wave controls include:
+
+- Temperature
+- Top-P
+- Top-K
+- Min-P
+- Repeat penalty
+- Repeat last N
+- Seed
+- Stop sequences
+- Keep alive
+
+Unset fields are omitted from the native request so Ollama/model defaults continue to apply. **Reset to Auto** removes configured overrides.
+
+## Runtime diagnostics
+
+**Advanced local controls → Runtime (Expert)** can query:
+
+- Ollama server version
+- currently loaded models
+- loaded model size
+- VRAM footprint reported by `/api/ps`
+- active runtime context length
+- model expiry time and digest information
+
+The diagnostic payload can be copied for troubleshooting.
+
+Hardware/runtime knobs such as thread count, GPU placement, batch size, and memory-mapping flags are not exposed unless the running Ollama API provides a reliable, documented contract for them. This prevents a Cline setting from forcing unsupported runtime behavior.
+
+## Long sessions
+
+Cline supports automatic context compaction for long-running sessions. The global Agent settings expose **Off**, **Basic**, and **Agentic** compaction modes.
+
+The chat UI reports the effective context window, approximate current context usage, compaction threshold, and the most recent compaction event when available.
+
+For local development, a useful operating pattern is:
+
+```text
+Inspect -> decide -> act -> verify
+```
+
+Routine confirmations can be reduced through the local-agent autonomy settings, while destructive or irreversible actions remain separately guarded by the existing tool/safety mechanisms.
+
+## Troubleshooting
+
+### Model is missing from the picker
+
+Verify that Ollama is running and the model is installed:
+
+```bash
+ollama list
+```
+
+Then refresh the Ollama model list in Cline.
+
+### Vision is not shown
+
+Cline derives vision support from the model metadata returned by Ollama. If `/api/show` is unavailable or returns incomplete metadata, the model's capability state can remain unknown rather than being guessed from its name.
+
+### A large image is rejected
+
+Check the local Ollama media budget in the provider settings. The error reports the actual limit that rejected the image.
+
+### The first response takes a long time
+
+Increase the Ollama **Request Timeout** when cold loading or prefill takes longer than the current response-start timeout. Also consider lowering the configured context window on limited-VRAM hardware.

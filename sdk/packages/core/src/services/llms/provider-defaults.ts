@@ -117,6 +117,9 @@ export const DEFAULT_MODELS_CATALOG_URL = "https://models.dev/api.json";
 const DEFAULT_MODELS_CATALOG_CACHE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_PRIVATE_MODELS_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_PRIVATE_MODELS_REQUEST_TIMEOUT_MS = 5_000;
+const OLLAMA_MODEL_DETAILS_REQUEST_TIMEOUT_MS = 5_000;
+const OLLAMA_MODEL_DETAILS_CONCURRENCY = 6;
+const OLLAMA_MODEL_DETAILS_CACHE_TTL_MS = 30 * 60 * 1000;
 
 const MODELS_CATALOG_CACHE = new Map<
 	string,
@@ -337,6 +340,285 @@ function buildModelFromPrivateSource(
 		releaseDate: input.releaseDate,
 		status: "active",
 	};
+}
+
+interface OllamaTagModel {
+	name?: string;
+	model?: string;
+	digest?: string;
+	modified_at?: string;
+	capabilities?: string[];
+}
+
+interface OllamaTagsResponse {
+	models?: OllamaTagModel[];
+}
+
+interface OllamaShowResponse {
+	capabilities?: string[];
+	thinking?: boolean | { values?: Array<boolean | string> };
+	model_info?: Record<string, unknown>;
+}
+
+interface CachedOllamaModelDetails {
+	fingerprint: string;
+	expiresAt: number;
+	data: ModelInfo | null;
+}
+
+const OLLAMA_MODEL_DETAILS_CACHE = new Map<
+	string,
+	CachedOllamaModelDetails
+>();
+
+function getOllamaShowUrl(tagsUrl: string): string | undefined {
+	try {
+		const url = new URL(tagsUrl);
+		const pathname = url.pathname.replace(/\/+$/, "");
+		if (pathname.endsWith("/api/tags")) {
+			url.pathname = `${pathname.slice(0, -"/api/tags".length)}/api/show`;
+			url.search = "";
+			url.hash = "";
+			return url.toString();
+		}
+	} catch {
+		// Let the caller keep using the normal model source path.
+	}
+	return undefined;
+}
+
+function buildOllamaRequestHeaders(
+	url: string,
+	config: ProviderConfig,
+	baseUrl = config.baseUrl,
+): Headers | undefined {
+	try {
+		const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+		if (
+			!normalizedBaseUrl ||
+			new URL(url).origin !== new URL(normalizedBaseUrl).origin
+		) {
+			return undefined;
+		}
+	} catch {
+		return undefined;
+	}
+
+	const headers = new Headers();
+	const token = resolveAuthToken(config);
+	if (token) {
+		headers.set("Authorization", `Bearer ${token}`);
+	}
+	for (const [name, value] of Object.entries(config.headers ?? {})) {
+		headers.set(name, value);
+	}
+	let hasHeaders = false;
+	headers.forEach(() => {
+		hasHeaders = true;
+	});
+	return hasHeaders ? headers : undefined;
+}
+
+function getOllamaContextWindow(
+	modelInfo: Record<string, unknown> | undefined,
+): number | undefined {
+	if (!modelInfo) return undefined;
+	const candidates = Object.entries(modelInfo).filter(([key]) =>
+		key === "context_length" || key.endsWith(".context_length"),
+	);
+	for (const [, value] of candidates) {
+		const parsed =
+			typeof value === "number"
+				? value
+				: typeof value === "string"
+					? Number(value)
+					: Number.NaN;
+		if (Number.isSafeInteger(parsed) && parsed > 0) return parsed;
+	}
+	return undefined;
+}
+
+function normalizeOllamaCapabilities(value: unknown): string[] | undefined {
+	if (!Array.isArray(value)) return undefined;
+	const capabilities = value.filter(
+		(capability): capability is string =>
+			typeof capability === "string" && capability.trim().length > 0,
+	);
+	return capabilities.length > 0 ? [...new Set(capabilities)] : undefined;
+}
+
+function getOllamaThinkingConfig(
+	show: OllamaShowResponse | undefined,
+): ModelInfo["thinkingConfig"] {
+	if (show?.thinking === true) return {};
+	if (!show?.thinking || typeof show.thinking !== "object") return undefined;
+	const values = show.thinking.values;
+	if (!Array.isArray(values) || values.length === 0) return undefined;
+	return {
+		...(values.includes("low") || values.includes("high")
+			? { thinkingLevel: values.includes("high") ? "high" : "low" }
+			: {}),
+	};
+}
+
+function buildOllamaModelInfo(
+	id: string,
+	tag: OllamaTagModel,
+	show?: OllamaShowResponse,
+): ModelInfo | undefined {
+	const showCapabilities = normalizeOllamaCapabilities(show?.capabilities);
+	const tagCapabilities = normalizeOllamaCapabilities(tag.capabilities);
+	const authoritativeCapabilities = showCapabilities !== undefined;
+	const capabilities = showCapabilities ?? tagCapabilities;
+	const contextWindow = getOllamaContextWindow(show?.model_info);
+	const thinkingConfig = getOllamaThinkingConfig(show);
+
+	// Completion is the native Ollama capability that identifies a language/chat
+	// model. Explicit non-completion models such as embedding-only models do not
+	// belong in Cline's chat model picker. When /api/show is unavailable, use an
+	// explicit tag-level embedding-only declaration as the same conservative
+	// filter, but do not infer any negative capability from incomplete tags.
+	if (capabilities && !capabilities.includes("completion")) {
+		if (authoritativeCapabilities || tagCapabilities?.includes("embedding")) {
+			return undefined;
+		}
+	}
+
+	if (!authoritativeCapabilities) {
+		// /api/tags is only an inventory source. Its capability list has varied
+		// across Ollama versions and is not safe to treat as a complete denial
+		// list. Keep capability state unknown unless /api/show provides the full
+		// model contract; positive thinking evidence is carried separately.
+		return {
+			id,
+			name: tag.name ?? tag.model ?? id,
+			...(contextWindow !== undefined
+				? { contextWindow, maxInputTokens: contextWindow }
+				: {}),
+			...(thinkingConfig ? { thinkingConfig } : {}),
+			status: "active",
+		};
+	}
+
+	const modelCapabilities: NonNullable<ModelInfo["capabilities"]> = [
+		"streaming",
+	];
+	includeCapability(modelCapabilities, "tools", capabilities?.includes("tools") === true);
+	includeCapability(modelCapabilities, "images", capabilities?.includes("vision") === true);
+	includeCapability(
+		modelCapabilities,
+		"reasoning",
+		capabilities?.includes("thinking") === true || thinkingConfig !== undefined,
+	);
+
+	return {
+		id,
+		name: tag.name ?? tag.model ?? id,
+		...(contextWindow !== undefined ? { contextWindow, maxInputTokens: contextWindow } : {}),
+		capabilities: modelCapabilities,
+		...(thinkingConfig ? { thinkingConfig } : {}),
+		modalities: {
+			input: capabilities?.includes("vision") ? ["text", "image"] : ["text"],
+			output: ["text"],
+		},
+		status: "active",
+	};
+}
+
+function getOllamaModelFingerprint(tag: OllamaTagModel, id: string): string {
+	if (tag.digest?.trim()) return tag.digest.trim();
+	if (tag.modified_at?.trim()) return tag.modified_at.trim();
+	return fingerprint(JSON.stringify(tag) || id);
+}
+
+async function fetchOllamaModelDetails(
+	tagsUrl: string,
+	config: ProviderConfig,
+	tags: OllamaTagModel[],
+	cacheNamespace: string,
+	baseUrl: string | undefined,
+): Promise<Record<string, ModelInfo>> {
+	const showUrl = getOllamaShowUrl(tagsUrl);
+	if (!showUrl) return {};
+
+	const now = Date.now();
+	const models: Record<string, ModelInfo> = {};
+	const pending: Array<{
+		id: string;
+		tag: OllamaTagModel;
+		fingerprint: string;
+	}> = [];
+
+	for (const tag of tags) {
+		const id = tag.name?.trim() || tag.model?.trim();
+		if (!id) continue;
+
+		const fingerprintValue = getOllamaModelFingerprint(tag, id);
+		const cacheKey = `${cacheNamespace}:${id}`;
+		const cached = OLLAMA_MODEL_DETAILS_CACHE.get(cacheKey);
+		if (
+			cached &&
+			cached.fingerprint === fingerprintValue &&
+			cached.expiresAt > now
+		) {
+			if (cached.data) models[id] = cached.data;
+			continue;
+		}
+
+		// /api/show is the authoritative per-model source. /api/tags can contain
+		// capability metadata on newer Ollama versions, but older versions have
+		// returned incomplete capability lists. Always verify uncached models with
+		// /api/show; the digest-keyed cache keeps this to one request per changed
+		// model within the cache TTL.
+		pending.push({ id, tag, fingerprint: fingerprintValue });
+	}
+
+	if (pending.length === 0) return models;
+
+	const headers = buildOllamaRequestHeaders(showUrl, config, baseUrl);
+	let nextIndex = 0;
+	const worker = async () => {
+		while (nextIndex < pending.length) {
+			const index = nextIndex++;
+			const { id, tag, fingerprint: fingerprintValue } = pending[index];
+			try {
+				const response = await fetchWithTimeout(
+					showUrl,
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							...Object.fromEntries(headers?.entries() ?? []),
+						},
+						redirect: "error",
+						body: JSON.stringify({ model: id }),
+					},
+					OLLAMA_MODEL_DETAILS_REQUEST_TIMEOUT_MS,
+				);
+				if (!response.ok) throw new Error(`HTTP ${response.status}`);
+				const show = (await response.json()) as OllamaShowResponse;
+				const data = buildOllamaModelInfo(id, tag, show);
+				OLLAMA_MODEL_DETAILS_CACHE.set(`${cacheNamespace}:${id}`, {
+					fingerprint: fingerprintValue,
+					expiresAt: now + OLLAMA_MODEL_DETAILS_CACHE_TTL_MS,
+					data: data ?? null,
+				});
+				if (data) models[id] = data;
+			} catch {
+				const fallback = buildOllamaModelInfo(id, tag);
+				if (fallback) {
+					models[id] = fallback;
+				}
+			}
+		}
+	};
+
+	const workers = Array.from(
+		{ length: Math.min(OLLAMA_MODEL_DETAILS_CONCURRENCY, pending.length) },
+		() => worker(),
+	);
+	await Promise.all(workers);
+	return models;
 }
 
 interface BasetenModelResponse {
@@ -718,27 +1000,68 @@ async function getPublicProviderModels(
 		return inFlight;
 	}
 
-	const request = fetchModelIdsFromSource(sourceUrl, providerId, {
-		baseUrl: config.baseUrl ?? collection?.provider.baseUrl,
-		apiKey: resolveAuthToken(config),
-		headers: config.headers,
-	})
-		.then((modelIds) => {
-			const data = Object.fromEntries(
-				modelIds.map((id) => [
-					id,
-					buildModelFromPrivateSource(id, { name: id }),
-				]),
-			);
-			PUBLIC_MODELS_CACHE.set(cacheKey, {
-				data,
-				expiresAt: now + cacheTtlMs,
+	const isOllama = providerId === "ollama";
+	const effectiveBaseUrl = config.baseUrl ?? collection?.provider.baseUrl;
+	const request = isOllama
+		? fetchWithTimeout(
+				sourceUrl,
+				{
+					method: "GET",
+					headers: buildOllamaRequestHeaders(
+						sourceUrl,
+						config,
+						effectiveBaseUrl,
+					),
+					redirect: "error",
+				},
+				DEFAULT_PRIVATE_MODELS_REQUEST_TIMEOUT_MS,
+			)
+			.then(async (response) => {
+				if (!response.ok) {
+					throw new Error(
+						`failed to fetch models from ${sourceUrl}: HTTP ${response.status}`,
+					);
+				}
+				const payload = (await response.json()) as OllamaTagsResponse;
+				return fetchOllamaModelDetails(
+					sourceUrl,
+					config,
+					payload.models ?? [],
+					cacheKey,
+					effectiveBaseUrl,
+				);
+			})
+			.then((data) => {
+				PUBLIC_MODELS_CACHE.set(cacheKey, {
+					data,
+					expiresAt: now + cacheTtlMs,
+				});
+				return data;
+			})
+			.finally(() => {
+				PUBLIC_MODELS_IN_FLIGHT.delete(cacheKey);
+			})
+		: fetchModelIdsFromSource(sourceUrl, providerId, {
+				baseUrl: effectiveBaseUrl,
+				apiKey: resolveAuthToken(config),
+				headers: config.headers,
+			})
+			.then((modelIds) => {
+				const data = Object.fromEntries(
+					modelIds.map((id) => [
+						id,
+						buildModelFromPrivateSource(id, { name: id }),
+					]),
+				);
+				PUBLIC_MODELS_CACHE.set(cacheKey, {
+					data,
+					expiresAt: now + cacheTtlMs,
+				});
+				return data;
+			})
+			.finally(() => {
+				PUBLIC_MODELS_IN_FLIGHT.delete(cacheKey);
 			});
-			return data;
-		})
-		.finally(() => {
-			PUBLIC_MODELS_IN_FLIGHT.delete(cacheKey);
-		});
 
 	PUBLIC_MODELS_IN_FLIGHT.set(cacheKey, request);
 	return request;
@@ -747,6 +1070,7 @@ async function getPublicProviderModels(
 export function clearPublicModelsCatalogCache(): void {
 	PUBLIC_MODELS_CACHE.clear();
 	PUBLIC_MODELS_IN_FLIGHT.clear();
+	OLLAMA_MODEL_DETAILS_CACHE.clear();
 }
 
 async function fetchPrivateProviderModels(

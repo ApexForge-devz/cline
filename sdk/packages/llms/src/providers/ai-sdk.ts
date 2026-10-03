@@ -396,6 +396,7 @@ function buildAiSdkRequestMessages(
 					? ["text", "image"]
 					: ["text"]
 				: undefined),
+			mediaBudget: context.config.mediaBudget,
 	}) as Array<Record<string, unknown>>;
 
 	if (shouldApplyBedrockCachePoint(request, context)) {
@@ -728,6 +729,7 @@ function toAiSdkMessages(
 	options?: {
 		includeReasoning?: boolean;
 		supportedInputModalities?: readonly string[];
+		mediaBudget?: import("@cline/shared").MediaBudgetOptions;
 	},
 ) {
 	const includeReasoning = options?.includeReasoning ?? true;
@@ -841,6 +843,7 @@ function toAiSdkMessages(
 	return formatMessagesForAiSdk(systemPrompt, normalizedMessages, {
 		assistantToolCallArgKey: "input",
 		supportedInputModalities: options?.supportedInputModalities,
+		mediaBudget: options?.mediaBudget,
 	});
 }
 

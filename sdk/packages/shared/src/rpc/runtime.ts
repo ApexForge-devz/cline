@@ -25,6 +25,7 @@ export interface ChatRuntimeConfig extends SessionPromptConfig {
 	/** Additional Agent Plugins package roots resolved by the hub runtime. */
 	agentPluginPaths?: string[];
 	autoApproveTools?: boolean;
+	maxParallelToolCalls?: number;
 	missionStepInterval?: number;
 	missionTimeIntervalMs?: number;
 	timeoutSeconds?: number;
@@ -162,6 +163,31 @@ export interface ProviderModelFeatured {
 	tags: string[];
 }
 
+export interface ProviderModelCapabilityOverrides {
+	/** Explicit model capability override. Omitted means automatic discovery. */
+	vision?: boolean;
+	/** Explicit model capability override. Omitted means automatic discovery. */
+	tools?: boolean;
+	/** Explicit model capability override. Omitted means automatic discovery. */
+	reasoning?: boolean;
+}
+
+export interface ProviderModelSettingsOverride {
+	contextWindow?: number;
+	maxTokens?: number;
+	reasoning?: {
+		enabled?: boolean;
+		effort?: ReasoningLevel;
+		budgetTokens?: number;
+	};
+	capabilities?: ProviderModelCapabilityOverrides;
+}
+
+export type ProviderModelSettingsOverrides = Record<
+	string,
+	ProviderModelSettingsOverride
+>;
+
 export interface ProviderModel {
 	id: string;
 	name: string;
@@ -236,6 +262,24 @@ export interface ProviderListItem {
 	baseUrlDescription: string;
 	configFields?: ProviderConfigField[];
 	configValues?: Record<string, ProviderConfigFieldPrimitive>;
+	headers?: Record<string, string>;
+	modelOverrides?: ProviderModelSettingsOverrides;
+	mediaBudget?: {
+		maxImageEncodedBytes?: number;
+		maxImageDecodedBytes?: number;
+		maxTotalMediaBytes?: number;
+	};
+	ollamaGeneration?: {
+		temperature?: number;
+		topP?: number;
+		topK?: number;
+		minP?: number;
+		repeatPenalty?: number;
+		repeatLastN?: number;
+		seed?: number;
+		stop?: string | string[];
+		keepAlive?: string | number;
+	};
 	modelList?: ProviderModel[];
 	family?: string;
 }
@@ -342,6 +386,24 @@ export interface SaveProviderSettingsActionRequest {
 		enabled?: boolean;
 		effort?: ReasoningLevel;
 		budgetTokens?: number;
+	};
+	/** Complete per-model overrides. Omitted means unchanged; empty clears all. */
+	modelOverrides?: ProviderModelSettingsOverrides;
+	mediaBudget?: {
+		maxImageEncodedBytes?: number;
+		maxImageDecodedBytes?: number;
+		maxTotalMediaBytes?: number;
+	};
+	ollamaGeneration?: {
+		temperature?: number;
+		topP?: number;
+		topK?: number;
+		minP?: number;
+		repeatPenalty?: number;
+		repeatLastN?: number;
+		seed?: number;
+		stop?: string | string[];
+		keepAlive?: string | number;
 	};
 	// AWS/Bedrock configuration
 	aws?: {

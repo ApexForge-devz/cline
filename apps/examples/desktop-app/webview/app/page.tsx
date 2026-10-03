@@ -65,6 +65,7 @@ import { toast } from "@/hooks/use-toast";
 import { applyAppZoomAction, syncAppFontSize } from "@/lib/app-font-size";
 import { syncAppIcon } from "@/lib/app-icon";
 import type { ChatSessionConfig } from "@/lib/chat-schema";
+import { resolveOllamaRuntimeSettings } from "@/lib/ollama-runtime-settings";
 import { openPersonalGitHubInstallUrl } from "@/lib/cline-integrations";
 import { cloudRepositoryLabel } from "@/lib/cloud-repositories";
 import {
@@ -86,6 +87,7 @@ import {
 import { syncDesktopWindowTitle } from "@/lib/desktop-window-title";
 import {
 	cloudImageAttachmentError,
+	localOllamaImageAttachmentError,
 	imageAttachmentMediaType,
 	isSupportedImageAttachment,
 	isUnsupportedImageAttachment,
@@ -1304,7 +1306,7 @@ function ChatThreadPane({
 			? "worktree"
 			: "local";
 	const [providerCredentials, setProviderCredentials] = useState<
-		Record<string, { apiKey: string; auth?: ProviderAuthInfo }>
+		Record<string, { apiKey: string; auth?: ProviderAuthInfo; configValues?: Record<string, string | number | boolean | null>; headers?: Record<string, string>; modelOverrides?: Record<string, import("@/lib/provider-schema").ProviderModelSettingsOverride> }>
 	>(() => readProviderCatalogSnapshot()?.credentials ?? {});
 	const [providerModelContextWindows, setProviderModelContextWindows] =
 		useState<Record<string, Record<string, number>>>(
@@ -1449,8 +1451,16 @@ function ChatThreadPane({
 			if (providerCredentialsRequestRef.current !== requestId) {
 				return;
 			}
-			const next: Record<string, { apiKey: string; auth?: ProviderAuthInfo }> =
-				{};
+			const next: Record<
+				string,
+				{
+					apiKey: string;
+					auth?: ProviderAuthInfo;
+					configValues?: Record<string, string | number | boolean | null>;
+					headers?: Record<string, string>;
+					modelOverrides?: import("@/lib/provider-schema").ProviderModelSettingsOverrides;
+				}
+			> = {};
 			const nextContextWindows: Record<string, Record<string, number>> = {};
 			let anyConnected = false;
 			for (const provider of payload.providers ?? []) {
@@ -1461,6 +1471,9 @@ function ChatThreadPane({
 				next[id] = {
 					apiKey: provider.apiKey?.trim() ?? "",
 					auth: provider.auth,
+					configValues: provider.configValues,
+					headers: provider.headers,
+					modelOverrides: provider.modelOverrides,
 				};
 				if (isProviderConnected(provider)) {
 					anyConnected = true;
@@ -1528,6 +1541,45 @@ function ChatThreadPane({
 		providerCredentials,
 		setConfig,
 	]);
+
+	const selectedOllamaRuntime = useMemo(() => {
+		if (config.provider.trim() !== "ollama") return null;
+		const provider = providerCredentials[config.provider.trim()];
+		if (!provider) return null;
+		return resolveOllamaRuntimeSettings({
+			configValues: provider.configValues,
+			mediaBudget: {
+				maxImageEncodedBytes: Number(provider.configValues?.["mediaBudget.maxImageEncodedBytes"] ?? NaN),
+				maxImageDecodedBytes: Number(provider.configValues?.["mediaBudget.maxImageDecodedBytes"] ?? NaN),
+				maxTotalMediaBytes: Number(provider.configValues?.["mediaBudget.maxTotalMediaBytes"] ?? NaN),
+			},
+			headers: provider.headers,
+			modelOverrides: provider.modelOverrides,
+			modelContextWindow: providerModelContextWindows[config.provider.trim()]?.[config.model.trim()],
+			modelId: config.model.trim(),
+		});
+	}, [config.model, config.provider, providerCredentials, providerModelContextWindows]);
+
+	const effectiveContextWindow =
+		selectedOllamaRuntime?.contextWindow ?? modelContextWindow;
+
+	const lastAutoAppliedOllamaSelectionRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (!selectedOllamaRuntime) return;
+		const selectionKey = `${config.provider.trim()}\0${config.model.trim()}`;
+		if (lastAutoAppliedOllamaSelectionRef.current === selectionKey) return;
+		lastAutoAppliedOllamaSelectionRef.current = selectionKey;
+		setConfig((prev) => ({
+			...prev,
+			providerConfig: selectedOllamaRuntime.providerConfig,
+			...(selectedOllamaRuntime.providerConfig.maxParallelToolCalls !== undefined
+				? { maxParallelToolCalls: selectedOllamaRuntime.providerConfig.maxParallelToolCalls }
+				: {}),
+			...(selectedOllamaRuntime.thinking !== undefined ? { thinking: selectedOllamaRuntime.thinking } : {}),
+			...(selectedOllamaRuntime.reasoningEffort !== undefined ? { reasoningEffort: selectedOllamaRuntime.reasoningEffort } : {}),
+			...(selectedOllamaRuntime.thinkingBudgetTokens !== undefined ? { thinkingBudgetTokens: selectedOllamaRuntime.thinkingBudgetTokens } : {}),
+		}));
+	}, [config.model, config.provider, selectedOllamaRuntime, setConfig]);
 
 	const getWorkspaceCwd = useCallback(
 		() =>
@@ -1899,15 +1951,25 @@ function ChatThreadPane({
 						next.push(file);
 					}
 				}
-				const error = isCloudSession && cloudImageAttachmentError(next);
+				const error = isCloudSession
+					? cloudImageAttachmentError(next)
+					: config.provider.trim() === "ollama"
+						? localOllamaImageAttachmentError(
+							next.filter((file) => imageAttachmentMediaType(file)),
+							selectedOllamaRuntime?.providerConfig.mediaBudget,
+						)
+						: undefined;
 				if (error) {
-					toast({ title: "Cloud attachment limit", description: error });
+					toast({
+						title: isCloudSession ? "Cloud attachment limit" : "Local Ollama attachment limit",
+						description: error,
+					});
 					return current;
 				}
 				return next;
 			});
 		},
-		[isCloudSession, setPendingAttachments],
+		[config.provider, isCloudSession, selectedOllamaRuntime, setPendingAttachments],
 	);
 
 	const handleSend = useCallback(
@@ -2305,7 +2367,8 @@ function ChatThreadPane({
 		[setConfig],
 	);
 	const handleProviderChange = useCallback(
-		(nextProvider: string) =>
+		(nextProvider: string) => {
+			lastAutoAppliedOllamaSelectionRef.current = null;
 			setConfig((prev) => {
 				const selected = providerCredentials[nextProvider];
 				const nextApiKey = selected?.apiKey ?? "";
@@ -2321,8 +2384,10 @@ function ChatThreadPane({
 					provider: nextProvider,
 					apiKey: nextApiKey,
 					providerAuth: selected?.auth,
+					providerConfig: undefined,
 				};
-			}),
+			});
+		},
 		[providerCredentials, setConfig],
 	);
 	const handleSendPrompt = useCallback(
@@ -2547,6 +2612,7 @@ function ChatThreadPane({
 			repoUrl={config.repoUrl}
 			model={config.model}
 			modelContextWindow={modelContextWindow}
+			effectiveContextWindow={effectiveContextWindow}
 			mode={config.mode}
 			promptsInQueue={promptsInQueue}
 			promptDraft={promptDraft}

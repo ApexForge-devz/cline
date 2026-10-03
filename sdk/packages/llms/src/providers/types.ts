@@ -21,6 +21,7 @@ export {
 	hasCapability,
 	isBuiltInProviderId,
 	type ModelCatalogConfig,
+	type OllamaGenerationOptions,
 	type ModelConfig,
 	normalizeProviderId,
 	type OcaConfig,

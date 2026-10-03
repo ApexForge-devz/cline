@@ -106,6 +106,88 @@ describe("ProviderDetailContent models", () => {
 		expect(onUpdateModels).toHaveBeenCalledWith(["alpha", "beta", "gamma"]);
 	});
 
+
+	it("exposes Ollama provider settings and explicit per-model overrides", async () => {
+		const onUpdate = vi.fn();
+		await act(async () => {
+			root.render(
+				<ProviderDetailContent
+					modelsError={null}
+					onBack={vi.fn()}
+					onLoadModels={vi.fn()}
+					onUpdate={onUpdate}
+					provider={{
+						...provider,
+						headers: { "X-Test": "one" },
+						configFields: [
+							{ path: "apiKey", label: "API Key", type: "password" },
+							{ path: "baseUrl", label: "Base URL", type: "url" },
+							{ path: "timeout", label: "Request Timeout (ms)", type: "number" },
+							{ path: "contextWindow", label: "Context Window", type: "number" },
+							{ path: "maxTokens", label: "Max Output Tokens", type: "number" },
+							{
+								path: "reasoning.enabled",
+								label: "Thinking",
+								type: "select",
+								options: [
+									{ label: "Enabled", value: true },
+									{ label: "Disabled", value: false },
+								],
+							},
+							{
+								path: "reasoning.effort",
+								label: "Reasoning Effort",
+								type: "select",
+								options: [{ label: "High", value: "high" }],
+							},
+							{ path: "reasoning.budgetTokens", label: "Thinking Budget", type: "number" },
+						],
+						configValues: {
+							timeout: 300000,
+							contextWindow: 32768,
+						},
+						modelList: [
+							{ id: "vision", name: "Vision", contextWindow: 65536, supportsVision: true, supportsReasoning: true },
+							{ id: "text", name: "Text", contextWindow: 32768 },
+						],
+						modelOverrides: {
+							vision: { capabilities: { vision: true }, contextWindow: 32768 },
+						},
+					}}
+				/> ,
+			);
+		});
+
+		expect(container.textContent).toContain("Request Timeout (ms)");
+		expect(container.textContent).toContain("Context Window");
+		expect(container.textContent).toContain("Max Output Tokens");
+		expect(container.textContent).toContain("Reasoning Effort");
+		expect(container.textContent).toContain("Custom headers JSON");
+
+		await act(async () => {
+			container
+				.querySelector<HTMLButtonElement>('[aria-label="Configure Vision"]')
+				?.click();
+		});
+
+		expect(container.textContent).toContain("Vision");
+		expect(container.textContent).toContain("Custom override");
+		const capability = container.querySelector<HTMLSelectElement>(
+			'[aria-label="Vision capability override"]',
+		);
+		expect(capability?.value).toBe("enabled");
+		await act(async () => {
+			if (!capability) throw new Error("missing capability override");
+			capability.value = "disabled";
+			capability.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(onUpdate).toHaveBeenCalledWith({
+			modelOverrides: {
+				vision: { capabilities: { vision: false }, contextWindow: 32768 },
+			},
+		});
+	});
+
 	it.each([
 		false,
 		true,
