@@ -1,13 +1,6 @@
-// Generates the Tauri updater manifest (latest.json) from the updater
-// artifacts produced by the desktop-publish workflow. The manifest is uploaded
-// to the rolling `desktop-latest` GitHub release, which is the static endpoint
-// configured in src-tauri/tauri.conf.json; its platform URLs point back at the
-// immutable per-version release assets.
-//
-// Usage:
-//   bun scripts/generate-update-manifest.ts \
-//     --version 0.1.0 --tag desktop-v0.1.0 --dir dist/desktop \
-//     --out dist/desktop/latest.json [--repo cline/cline] [--notes-file notes.md]
+// Generates the Tauri updater manifest (latest.json) from updater artifacts
+// produced by a desktop release build. Configure --repo or GITHUB_REPOSITORY
+// when generating manifests for a release hosted by your own repository.
 
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -24,30 +17,17 @@ export type UpdateManifest = {
 	platforms: Record<string, UpdaterPlatformEntry>;
 };
 
-// Maps the arch token embedded in macOS artifact file names (see the "Collect
-// artifacts" workflow step) to the platform keys the Tauri updater requests.
-// A universal (fat) bundle serves both macOS architectures: each slice of the
-// installed app requests its own compile-time arch key at runtime, and both
-// keys point at the same artifact and signature.
 const MACOS_PLATFORM_KEYS_BY_ARCH_SUFFIX: Record<string, string[]> = {
 	aarch64: ["darwin-aarch64"],
 	x86_64: ["darwin-x86_64"],
 	universal: ["darwin-aarch64", "darwin-x86_64"],
 };
 
-// On Windows the updater artifact is the NSIS installer itself
-// (createUpdaterArtifacts signs the setup exe with the updater key), named
-// `<Product>_<version>_<arch>-setup.exe` by the Tauri bundler.
 const WINDOWS_PLATFORM_KEYS_BY_ARCH_SUFFIX: Record<string, string[]> = {
 	x64: ["windows-x86_64"],
 	arm64: ["windows-aarch64"],
 };
 
-// On Linux the updater artifacts are the packages themselves, signed by
-// createUpdaterArtifacts. The updater asks for `linux-<arch>-<installer>`
-// first and falls back to the bare `linux-<arch>` key, so each package format
-// gets only its own suffixed key: a deb must never be served to an rpm
-// install (or to an AppImage, which we do not ship).
 const LINUX_PLATFORM_KEYS_BY_FILE_SUFFIX: Record<string, string[]> = {
 	"_amd64.deb": ["linux-x86_64-deb"],
 	"_arm64.deb": ["linux-aarch64-deb"],
@@ -65,9 +45,7 @@ const getArgValue = (args: string[], name: string): string | undefined => {
 	return inline?.slice(prefix.length);
 };
 
-const platformKeysOfUpdaterArtifact = (
-	fileName: string,
-): string[] | undefined => {
+const platformKeysOfUpdaterArtifact = (fileName: string): string[] | undefined => {
 	if (fileName.endsWith(".app.tar.gz")) {
 		const arch = Object.keys(MACOS_PLATFORM_KEYS_BY_ARCH_SUFFIX).find(
 			(candidate) => fileName.includes(`_${candidate}`),
@@ -83,10 +61,7 @@ const platformKeysOfUpdaterArtifact = (
 	const linuxSuffix = Object.keys(LINUX_PLATFORM_KEYS_BY_FILE_SUFFIX).find(
 		(candidate) => fileName.endsWith(candidate),
 	);
-	if (linuxSuffix) {
-		return LINUX_PLATFORM_KEYS_BY_FILE_SUFFIX[linuxSuffix];
-	}
-	return undefined;
+	return linuxSuffix ? LINUX_PLATFORM_KEYS_BY_FILE_SUFFIX[linuxSuffix] : undefined;
 };
 
 export const buildUpdateManifest = (options: {
@@ -145,7 +120,7 @@ const main = () => {
 	const repo =
 		getArgValue(args, "--repo") ??
 		process.env.GITHUB_REPOSITORY ??
-		"cline/cline";
+		"ApexForge-devz/cline";
 	const notesFile = getArgValue(args, "--notes-file");
 
 	if (!version || !tag || !dir || !out) {
@@ -156,7 +131,7 @@ const main = () => {
 
 	const notes = notesFile
 		? readFileSync(notesFile, "utf8").trim()
-		: `Cline v${version}`;
+		: `Cline - ApexForge v${version}`;
 
 	const manifest = buildUpdateManifest({
 		version,
