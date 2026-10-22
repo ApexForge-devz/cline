@@ -4,7 +4,7 @@
 	"description": "Shared utilities, types, and schemas for Cline packages",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/cline/cline",
+		"url": "https://github.com/ApexForge-devz/cline",
 		"directory": "sdk/packages/shared"
 	},
 	"type": "module",

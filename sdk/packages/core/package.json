@@ -4,7 +4,7 @@
 	"version": "0.0.90",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/cline/cline",
+		"url": "https://github.com/ApexForge-devz/cline",
 		"directory": "sdk/packages/core"
 	},
 	"type": "module",
