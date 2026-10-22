@@ -18,9 +18,7 @@
 	},
 	"plugins": {
 		"updater": {
-			"endpoints": [
-				"https://github.com/cline/cline/releases/download/desktop-beta/latest.json"
-			]
+			"endpoints": []
 		}
 	}
 }
