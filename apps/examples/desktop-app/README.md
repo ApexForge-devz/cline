@@ -197,28 +197,15 @@ desktop integration notes.
 
 ## Releases & Auto-Updates
 
-Releases are built, signed, notarized, and published by the `desktop-publish`
-GitHub workflow as a single universal macOS DMG — one download that runs
-natively on both Apple Silicon and Intel (macOS picks the matching slice at
-launch, so users never choose an architecture) — plus a Windows x64 NSIS
-installer and Linux x64 and arm64 `.deb` and `.rpm` packages. The step-by-step flow
-(version bumps, changelog, tag, repo secrets) lives in the `publish-desktop`
-skill (`.cline/skills/publish-desktop/SKILL.md`).
+This fork intentionally disables the Tauri updater. Both the standard and beta
+desktop configurations use an empty updater endpoint list, so installed builds
+do not poll the original Cline release feeds or download/install updates in the
+background.
 
-Individual releases are not announced in-app; Settings → About lists the
-bundled release notes. Every so often a one-time "What's new" dialog catches
-users up on accumulated features — see the `desktop-whats-new` skill
-(`.cline/skills/desktop-whats-new/SKILL.md`).
-
-Installed apps auto-update via the Tauri updater: they poll the rolling
-`desktop-latest` release's `latest.json` on launch and every 2 hours, download
-updates in the background, and prompt for a restart. macOS installs the update
-in the background too; Windows and Linux install it when the user restarts
-(the NSIS installer on Windows, `pkexec dpkg -i` / `rpm -U` on Linux, which
-asks for the user's password). Two things must never be lost: the
-`desktop-latest` release/tag (its feed URL is baked into shipped apps) and the
-updater private key (`TAURI_SIGNING_PRIVATE_KEY` — without it, shipped apps
-can't verify new updates).
+To pick up changes from this repository, rebuild and install the desktop app
+yourself using the packaging commands above. The update-manifest script remains
+available for optional future use with releases hosted by this fork, but
+generating a manifest does not enable auto-updates in the shipped application.
 
 ### Linux
 
