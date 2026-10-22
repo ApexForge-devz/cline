@@ -206,7 +206,7 @@ Production?
 
 ## Resources
 
-Repository: https://github.com/cline/cline
-SDK Source: https://github.com/cline/cline/tree/main/sdk
+Repository: https://github.com/ApexForge-devz/cline
+SDK Source: https://github.com/ApexForge-devz/cline/tree/my-local-changes/sdk
 Documentation: https://docs.cline.bot/sdk/overview
 Discord: https://discord.gg/cline
