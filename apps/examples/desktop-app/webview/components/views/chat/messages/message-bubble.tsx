@@ -11,6 +11,7 @@ import {
 import {
 	Check,
 	Copy,
+	FileText,
 	Loader2,
 	PencilIcon,
 	SplitIcon,
@@ -21,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { resolveCredentialFailureAction } from "@/hooks/chat-session/helpers";
 import type {
 	ChatMessage,
+	ChatMessageAttachment,
 	ChatMessageImage,
 	ChatMessageMedia,
 } from "@/lib/chat-schema";
@@ -31,13 +33,47 @@ import { isSystemSteeringMessage } from "./group-messages";
 import { MessageImageCarousel } from "./image-carousel";
 import { ReasoningBlock } from "./reasoning-block";
 
+function formatAttachmentSize(sizeBytes?: number): string | undefined {
+	if (sizeBytes === undefined) return undefined;
+	if (sizeBytes < 1024) return `${sizeBytes} B`;
+	if (sizeBytes < 1024 * 1024) return `${Math.round(sizeBytes / 1024)} KB`;
+	return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatAttachmentType(attachment: ChatMessageAttachment): string | undefined {
+	const extension = attachment.name.split(".").pop()?.trim();
+	if (extension && extension !== attachment.name) return extension.toUpperCase();
+	if (attachment.mediaType?.includes("/")) {
+		return attachment.mediaType.split("/")[1]?.toUpperCase();
+	}
+	return undefined;
+}
+
+function AttachmentMeta({ attachment }: { attachment: ChatMessageAttachment }) {
+	const type = formatAttachmentType(attachment);
+	const size = formatAttachmentSize(attachment.sizeBytes);
+	const detail = [type, size].filter(Boolean).join(" · ");
+	return (
+		<div className="min-w-0 px-3 py-2">
+			<div className="truncate text-sm font-medium" title={attachment.name}>
+				{attachment.name}
+			</div>
+			{detail ? (
+				<div className="text-xs text-muted-foreground">{detail}</div>
+			) : null}
+		</div>
+	);
+}
+
 function MessageImages({
 	images,
 	isUser,
+	attachments = [],
 	onExpandImage,
 }: {
 	images: ChatMessageImage[];
 	isUser: boolean;
+	attachments?: ChatMessageAttachment[];
 	onExpandImage?: (image: ChatMessageImage) => void;
 }) {
 	if (!isUser) {
@@ -46,23 +82,54 @@ function MessageImages({
 		);
 	}
 
+	const imageAttachments = attachments.filter((attachment) => attachment.kind === "image");
 	return (
 		<div className="grid max-w-2xl gap-2">
-			{images.map((image, index) => (
-				<button
-					aria-label={`Expand attachment ${index + 1}`}
-					className="cursor-zoom-in overflow-hidden rounded-lg border border-border bg-muted text-left transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-					key={image.id}
-					onClick={() => onExpandImage?.(image)}
-					type="button"
+			{images.map((image, index) => {
+				const attachment = imageAttachments[index];
+				return (
+					<div
+						className="overflow-hidden rounded-lg border border-border bg-muted"
+						key={image.id}
+					>
+						<button
+							aria-label={`Expand attachment ${index + 1}`}
+							className="block w-full cursor-zoom-in overflow-hidden text-left transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							onClick={() => onExpandImage?.(image)}
+							type="button"
+						>
+							{/* biome-ignore lint/performance/noImgElement: In-memory data URLs do not have dimensions and cannot use Next's optimizer. */}
+							<img
+								alt={`Attachment ${index + 1}`}
+								className="max-h-56.25 max-w-56.25 object-contain"
+								src={`data:${image.mediaType};base64,${image.data}`}
+							/>
+						</button>
+						{attachment ? <AttachmentMeta attachment={attachment} /> : null}
+					</div>
+				);
+			})}
+		</div>
+	);
+}
+
+function MessageFileAttachments({
+	attachments,
+}: {
+	attachments: ChatMessageAttachment[];
+}) {
+	const files = attachments.filter((attachment) => attachment.kind !== "image");
+	if (files.length === 0) return null;
+	return (
+		<div className="flex max-w-2xl flex-col gap-2">
+			{files.map((attachment) => (
+				<div
+					className="flex min-w-0 items-center rounded-lg border border-border bg-muted"
+					key={`${attachment.kind}:${attachment.name}`}
 				>
-					{/* biome-ignore lint/performance/noImgElement: In-memory data URLs do not have dimensions and cannot use Next's optimizer. */}
-					<img
-						alt={`Attachment ${index + 1}`}
-						className="max-h-56.25 max-w-56.25 object-contain"
-						src={`data:${image.mediaType};base64,${image.data}`}
-					/>
-				</button>
+					<FileText className="ml-3 h-4 w-4 shrink-0 text-muted-foreground" />
+					<AttachmentMeta attachment={attachment} />
+				</div>
 			))}
 		</div>
 	);
@@ -254,6 +321,10 @@ export const MessageBubble = memo(function MessageBubble({
 				) : null}
 
 				{message.media?.length ? <MessageMedia media={message.media} /> : null}
+
+				{isUser && message.meta?.attachments?.length ? (
+					<MessageFileAttachments attachments={message.meta.attachments} />
+				) : null}
 
 				{displayContent ? (
 					<div className="min-w-0 max-w-full wrap-break-word">

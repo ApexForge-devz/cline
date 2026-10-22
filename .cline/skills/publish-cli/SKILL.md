@@ -1,6 +1,9 @@
 ---
 name: publish-cli
-description: Use when preparing, tagging, and publishing an apps/cli npm release. Guides changelog drafting, apps/cli/package.json version bumps, cli-vX.Y.Z tags, local npm publishing, and the publish-cli GitHub workflow.
+description: Use when preparing, tagging, and publishing an apps/cli npm
+  release. Guides changelog drafting, apps/cli/package.json version bumps,
+  cli-vX.Y.Z tags, local npm publishing, and the publish-cli GitHub workflow.
+disabled: true
 ---
 
 # CLI Release

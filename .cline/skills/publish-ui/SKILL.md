@@ -1,6 +1,10 @@
 ---
 name: publish-ui
-description: Prepare, validate, and publish standalone @cline/ui npm releases. Use when bumping the UI package version, publishing latest or next through ui-publish.yml, checking UI release readiness, or completing the one-time npm trusted-publishing bootstrap.
+description: Prepare, validate, and publish standalone @cline/ui npm releases.
+  Use when bumping the UI package version, publishing latest or next through
+  ui-publish.yml, checking UI release readiness, or completing the one-time npm
+  trusted-publishing bootstrap.
+disabled: true
 ---
 
 # Publish UI

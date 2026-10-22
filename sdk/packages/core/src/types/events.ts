@@ -45,6 +45,7 @@ export interface SessionPendingPrompt {
 	attachmentCount: number;
 	userImages?: string[];
 	userFiles?: string[];
+	userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[];
 }
 
 export interface SessionPendingPromptsEvent {
@@ -60,6 +61,7 @@ export interface SessionPendingPromptSubmittedEvent {
 	attachmentCount: number;
 	userImages?: string[];
 	userFiles?: string[];
+	userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[];
 }
 
 export interface SessionSnapshotEvent {

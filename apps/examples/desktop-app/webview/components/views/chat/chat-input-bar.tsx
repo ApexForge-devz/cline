@@ -73,8 +73,18 @@ import {
 import type { ProviderModel } from "@/lib/provider-schema";
 import { startStreamingTranscription } from "@/lib/streaming-transcription";
 import { cn } from "@/lib/utils";
+import { ModelRuntimePill } from "./model-runtime-pill";
 import { PullRequestBar } from "./pull-request-bar";
 import { TokenUsageRing } from "./token-usage-ring";
+import { QuickPrompts } from "./quick-prompts";
+import { ContextAttachPopover } from "./context-attach-popover";
+import { SessionBookmarks } from "./session-bookmarks";
+import { SessionHealthPill } from "./session-health-pill";
+import { RuntimeInspector } from "./runtime-inspector";
+import { PromptHistory, recordPromptHistory } from "./prompt-history";
+import { SessionActionsMenu } from "./session-actions-menu";
+import { ToolActivityStrip } from "./tool-activity-strip";
+import { SessionHudSurface } from "./session-hud";
 import { WorkspaceSelector as WorkspaceSelectorImpl } from "./workspace-selector";
 
 // Memoized: the workspace/branch selector fans out into popovers and lists
@@ -308,6 +318,7 @@ type ChatInputBarProps = {
 	environmentId: string;
 	variant?: "conversation" | "welcome";
 	readOnly?: boolean;
+	enableTools?: boolean;
 	status: ChatSessionStatus;
 	hasRunningAgents?: boolean;
 	provider: string;
@@ -335,6 +346,19 @@ type ChatInputBarProps = {
 	onSwitchGitBranch: (branch: string) => Promise<boolean>;
 	onSend: (prompt: string) => void;
 	onAbort: () => void;
+	onCompact?: () => Promise<void> | void;
+	compactingSession?: boolean;
+	activityLabel?: string | null;
+	messages?: import("@/lib/chat-schema").ChatMessage[];
+	pendingToolApprovals?: number;
+	pendingAskQuestions?: number;
+	fileDiffs?: import("@/lib/session-diff").SessionFileDiff[];
+	error?: string | null;
+	onForkSession?: () => Promise<void> | void;
+	onNewSession?: () => void;
+	onBookmarkFork?: (runCount: number) => Promise<void> | void;
+	runtimeConfig?: ChatSessionConfig;
+	sessionId?: string | null;
 	promptsInQueue: PromptInQueue[];
 	attachments: Array<{ id: string; name: string; isImage: boolean }>;
 	onAttachFiles: (files: File[]) => void;
@@ -360,6 +384,7 @@ function ChatInputBarImpl({
 	environmentId,
 	variant = "conversation",
 	readOnly = false,
+	enableTools = true,
 	status,
 	hasRunningAgents = false,
 	provider,
@@ -384,6 +409,19 @@ function ChatInputBarImpl({
 	onSwitchGitBranch,
 	onSend,
 	onAbort,
+	onCompact,
+	compactingSession = false,
+	activityLabel,
+	messages,
+	pendingToolApprovals = 0,
+	pendingAskQuestions = 0,
+	fileDiffs = [],
+	error,
+	onForkSession,
+	onNewSession,
+	onBookmarkFork,
+	runtimeConfig,
+	sessionId,
 	promptsInQueue,
 	attachments,
 	onAttachFiles,
@@ -570,6 +608,28 @@ function ChatInputBarImpl({
 			steeringPromptRef.current = false;
 		}
 	};
+	const insertComposerText = useCallback(
+		(text: string) => {
+			const normalized = text.trim();
+			if (!normalized) return;
+			const current = promptInputValueRef.current;
+			const separator = current.trim()
+				? current.endsWith("\n")
+					? "\n"
+					: "\n\n"
+				: "";
+			const next = `${current}${separator}${normalized}`;
+			setPromptInput(next);
+			requestAnimationFrame(() => {
+				const textarea = promptInputRef.current;
+				textarea?.focus();
+				textarea?.setSelectionRange(next.length, next.length);
+				setCursorIndex(next.length);
+			});
+		},
+		[setPromptInput],
+	);
+
 	const handleSend = useCallback(() => {
 		if (speechInputActive || readOnly) return;
 		if (unsupportedDraftImageCount > 0) {
@@ -587,6 +647,7 @@ function ChatInputBarImpl({
 			return;
 		}
 		setPromptInput("");
+		recordPromptHistory(prompt);
 		onSend(prompt);
 	}, [
 		needsCloudRepository,
@@ -1136,7 +1197,7 @@ function ChatInputBarImpl({
 							) : (
 								<>
 									{filteredSlashCommands.map((cmd, index) => (
-										<button
+											<button
 											aria-selected={index === slashSelectedIndex}
 											className={cn(
 												"flex w-full flex-col rounded-md px-3 py-2 text-left text-sm ",
@@ -1483,9 +1544,34 @@ function ChatInputBarImpl({
 			</AgentComposerBody>
 
 			{/* Composer settings */}
-			<AgentComposerSettings>
-				<AgentComposerSettingsGroup>
-					<button
+			<SessionHudSurface>
+				<AgentComposerSettings>
+					<AgentComposerSettingsGroup className="min-w-0">
+						{variant === "conversation" ? (
+							<div className="flex shrink-0 items-center gap-0.5">
+								<ContextAttachPopover
+									error={error}
+									fileDiffs={fileDiffs}
+									messages={messages ?? []}
+									onInsert={insertComposerText}
+								/>
+								<QuickPrompts
+									onInsert={insertComposerText}
+								/>
+								<PromptHistory onSelect={insertComposerText} />
+							</div>
+						) : null}
+						{variant === "conversation" ? (
+							<ToolActivityStrip
+								activityLabel={activityLabel}
+								busy={isBusy}
+								hasRunningAgents={hasRunningAgents}
+								messages={messages}
+								pendingAskQuestions={pendingAskQuestions}
+								pendingToolApprovals={pendingToolApprovals}
+							/>
+						) : null}
+						<button
 						aria-label={
 							executionTarget === "cloud" ? "Attach images" : "Attach files"
 						}
@@ -1567,6 +1653,20 @@ function ChatInputBarImpl({
 							provider={provider}
 						/>
 					</div>
+					{variant === "conversation" ? (
+						<ModelRuntimePill
+							contextWindow={effectiveContextWindow}
+							imageSupport={
+								imageCapability?.provider === provider && imageCapability.model === model
+									? imageCapability.supported
+									: null
+							}
+							model={model}
+							provider={provider}
+							reasoningSupport={modelSupportsReasoning}
+							toolsEnabled={enableTools}
+						/>
+					) : null}
 					<Select
 						disabled={cloudSettingsLocked || modelSupportsReasoning !== true}
 						onValueChange={handleEffortChange}
@@ -1599,7 +1699,7 @@ function ChatInputBarImpl({
 					</Select>
 				</AgentComposerSettingsGroup>
 
-				<AgentComposerSettingsEnd>
+				<AgentComposerSettingsEnd className="min-w-0">
 					{variant === "conversation" ? (
 						<div className="flex min-w-0 items-center gap-0">
 							<div className="min-w-0 overflow-visible">
@@ -1635,11 +1735,51 @@ function ChatInputBarImpl({
 								}}
 								contextWindow={effectiveContextWindow}
 								lastCompaction={summary.lastCompaction}
+								onCompact={onCompact}
+								canCompact={hasActiveSession && !isBusy && !readOnly}
+								compacting={compactingSession}
 							/>
+							{variant === "conversation" ? (
+								<SessionBookmarks
+									messages={messages ?? []}
+									onForkFromRunCount={onBookmarkFork}
+									sessionId={sessionId}
+								/>
+							) : null}
+							{variant === "conversation" ? (
+								<SessionHealthPill
+									contextRatio={
+										effectiveContextWindow && effectiveContextWindow > 0
+											? (summary.tokensIn + summary.tokensOut) / effectiveContextWindow
+											: 0
+									}
+									error={error}
+									hasRunningAgents={hasRunningAgents}
+									pendingAskQuestions={pendingAskQuestions}
+									pendingToolApprovals={pendingToolApprovals}
+									status={status}
+								/>
+							) : null}
+							{variant === "conversation" && runtimeConfig ? (
+								<RuntimeInspector config={runtimeConfig} />
+							) : null}
+							{variant === "conversation" ? (
+								<SessionActionsMenu
+									canCompact={hasActiveSession && !isBusy && !readOnly}
+									canCreateSession={Boolean(onNewSession)}
+									canFork={hasActiveSession && !isBusy && !readOnly}
+									compacting={compactingSession}
+									onCompact={onCompact}
+									onFork={onForkSession}
+									onNewSession={onNewSession}
+									onOpenModelSettings={onOpenModelSettings}
+								/>
+							) : null}
 						</div>
 					) : null}
 				</AgentComposerSettingsEnd>
 			</AgentComposerSettings>
+			</SessionHudSurface>
 		</AgentComposer>
 	);
 }

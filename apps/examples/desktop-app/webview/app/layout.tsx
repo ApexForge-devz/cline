@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { DesktopErrorTelemetry } from "@/components/desktop-error-telemetry";
 import { NativeShell } from "@/components/native-shell";
 import { Toaster } from "@/components/ui/toaster";
@@ -41,14 +42,16 @@ export default function RootLayout({
 			suppressHydrationWarning
 		>
 			<head>
-				<script
+				<Script
+					strategy="beforeInteractive"
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: static bootstrap must run before the first paint
 					dangerouslySetInnerHTML={{
 						__html: APP_FONT_SIZE_BOOTSTRAP_SCRIPT,
 					}}
 					id="cline-app-font-size-bootstrap"
 				/>
-				<script
+				<Script
+					strategy="beforeInteractive"
 					// biome-ignore lint/security/noDangerouslySetInnerHtml: static bootstrap must run before the first paint
 					dangerouslySetInnerHTML={{ __html: HUB_THEME_BOOTSTRAP_SCRIPT }}
 					id="cline-hub-theme-bootstrap"

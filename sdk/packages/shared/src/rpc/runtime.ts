@@ -62,6 +62,15 @@ export interface ChatStartSessionResponse {
 	startResult?: ChatStartSessionArtifacts;
 }
 
+export type ChatAttachmentKind = "image" | "file" | "other";
+
+export interface ChatAttachmentMetadata {
+	name: string;
+	kind: ChatAttachmentKind;
+	mediaType?: string;
+	sizeBytes?: number;
+}
+
 export interface ChatAttachmentFile {
 	name: string;
 	content: string;
@@ -70,6 +79,7 @@ export interface ChatAttachmentFile {
 export interface ChatAttachments {
 	userImages?: string[];
 	userFiles?: ChatAttachmentFile[];
+	metadata?: ChatAttachmentMetadata[];
 }
 
 export interface ChatRunTurnRequest {

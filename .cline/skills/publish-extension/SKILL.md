@@ -1,6 +1,12 @@
 ---
 name: publish-extension
-description: Use when releasing the Cline VS Code extension — stable (standalone SDK build of main via ext-vscode-publish), nightly (ext-vscode-publish-nightly, manual dispatch), or an emergency legacy-branch hotfix (ext-vscode-publish-legacy). Guides version selection, changelog, workflow dispatch, environment approvals, tagging, post-publish verification, and the remaining retirement of the finished A/B rollout machinery.
+description: Use when releasing the Cline VS Code extension — stable (standalone
+  SDK build of main via ext-vscode-publish), nightly
+  (ext-vscode-publish-nightly, manual dispatch), or an emergency legacy-branch
+  hotfix (ext-vscode-publish-legacy). Guides version selection, changelog,
+  workflow dispatch, environment approvals, tagging, post-publish verification,
+  and the remaining retirement of the finished A/B rollout machinery.
+disabled: true
 ---
 
 # VS Code Extension Release

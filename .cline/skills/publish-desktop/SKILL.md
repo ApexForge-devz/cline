@@ -1,6 +1,14 @@
 ---
 name: publish-desktop
-description: Use when preparing, tagging, and publishing a Cline desktop app (apps/examples/desktop-app) release — stable (desktop-vX.Y.Z from main), beta (desktop-vX.Y.Z-beta.N from desktop-experimental, shipped as the side-by-side "Cline Beta" app), or nightly (artifact-only test build of main's HEAD, tagged desktop-nightly-<stamp> after it builds). Guides changelog drafting, version bumps in package.json + tauri.conf.json, tagging, and the desktop-publish GitHub workflow that builds, signs, notarizes, and updates the per-channel auto-update feed.
+description: Use when preparing, tagging, and publishing a Cline desktop app
+  (apps/examples/desktop-app) release — stable (desktop-vX.Y.Z from main), beta
+  (desktop-vX.Y.Z-beta.N from desktop-experimental, shipped as the side-by-side
+  "Cline Beta" app), or nightly (artifact-only test build of main's HEAD, tagged
+  desktop-nightly-<stamp> after it builds). Guides changelog drafting, version
+  bumps in package.json + tauri.conf.json, tagging, and the desktop-publish
+  GitHub workflow that builds, signs, notarizes, and updates the per-channel
+  auto-update feed.
+disabled: true
 ---
 
 # Desktop App Release

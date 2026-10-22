@@ -1,3 +1,4 @@
+import type { ChatAttachmentMetadata } from "@cline/shared/browser";
 import type { SessionHookEvent } from "@/lib/session-diff";
 
 export type ProcessContext = {
@@ -185,6 +186,7 @@ export type SerializedAttachmentFile = {
 export type SerializedAttachments = {
 	userImages: string[];
 	userFiles: SerializedAttachmentFile[];
+	metadata: ChatAttachmentMetadata[];
 };
 
 export type PromptInQueue = {

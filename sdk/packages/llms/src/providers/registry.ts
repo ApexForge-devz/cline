@@ -171,6 +171,9 @@ export class GatewayRegistry {
 						options: registration.defaults.options
 							? { ...registration.defaults.options }
 							: undefined,
+						mediaBudget: registration.defaults.mediaBudget
+							? { ...registration.defaults.mediaBudget }
+							: undefined,
 						metadata: registration.defaults.metadata
 							? { ...registration.defaults.metadata }
 							: undefined,
@@ -192,6 +195,9 @@ export class GatewayRegistry {
 			timeoutMs: config.timeoutMs,
 			fetch: config.fetch,
 			options: config.options ? { ...config.options } : undefined,
+			mediaBudget: config.mediaBudget
+				? { ...config.mediaBudget }
+				: undefined,
 			metadata: config.metadata ? { ...config.metadata } : undefined,
 			enabled: config.enabled ?? true,
 			defaultModelId: config.defaultModelId,
@@ -319,6 +325,7 @@ export class GatewayRegistry {
 				timeoutMs: config?.timeoutMs ?? record.defaults?.timeoutMs,
 				fetch: config?.fetch ?? record.defaults?.fetch ?? this.fallbackFetch,
 				options,
+				mediaBudget: config?.mediaBudget ?? record.defaults?.mediaBudget,
 				metadata,
 			},
 			createProvider: record.createProvider,

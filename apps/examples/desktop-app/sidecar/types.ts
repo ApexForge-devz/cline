@@ -19,6 +19,7 @@ export type JsonRecord = Record<string, unknown>;
 export type ChatTurnAttachments = {
 	userImages?: string[];
 	userFiles?: Array<{ name: string; content: string }>;
+	metadata?: import("@cline/shared").ChatAttachmentMetadata[];
 };
 
 export type ChatSessionCommandRequest = {

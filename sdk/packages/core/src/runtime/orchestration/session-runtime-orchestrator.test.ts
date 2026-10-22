@@ -546,6 +546,92 @@ describe("SessionRuntime.getExtensionRegistry", () => {
 });
 
 describe("SessionRuntime message preparation", () => {
+	it("persists user attachment metadata on the conversation message", async () => {
+		const session = new SessionRuntime(
+			makeAgentConfig(),
+			withFakeRuntime().deps,
+		);
+		await session.run(
+			"Describe it",
+			["data:image/jpeg;base64,AQID"],
+			undefined,
+			[
+				{
+					name: "photo.jpg",
+					kind: "image",
+					mediaType: "image/jpeg",
+					sizeBytes: 3,
+				},
+			],
+		);
+
+		const message = session.getMessages()[0];
+		expect(message?.metadata).toEqual({
+			attachments: [
+				{
+					name: "photo.jpg",
+					kind: "image",
+					mediaType: "image/jpeg",
+					sizeBytes: 3,
+				},
+			],
+		});
+	});
+
+	it("uses the resolved provider media budget when preparing user images", async () => {
+		const { deps, configs } = makeRecordingRuntimeFactory();
+		const imageData = Buffer.alloc(4 * 1024 * 1024, 7).toString("base64");
+		const session = new SessionRuntime(
+			makeAgentConfig({
+				providerId: "ollama",
+				modelId: "qwen3.5:2b",
+				providerConfig: {
+					mediaBudget: {
+						maxImageEncodedBytes: 12 * 1024 * 1024,
+						maxImageDecodedBytes: 8 * 1024 * 1024,
+						maxTotalMediaBytes: 24 * 1024 * 1024,
+					},
+				},
+			}),
+			deps,
+		);
+
+		await session.run("describe it");
+		const beforeModel = configs[0]?.hooks?.beforeModel;
+		expect(beforeModel).toBeDefined();
+
+		const result = await beforeModel?.({
+			snapshot: makeSnapshot(),
+			request: {
+				systemPrompt: "system",
+				messages: [
+					{
+						id: "image-message",
+						role: "user",
+						content: [
+							{
+								type: "image",
+								image: imageData,
+								mediaType: "image/jpeg",
+							},
+						],
+						createdAt: 1,
+					},
+				],
+				tools: [],
+			},
+		});
+
+		const image = result?.messages?.[0]?.content.find(
+			(part) => part.type === "image",
+		);
+		expect(image).toMatchObject({
+			type: "image",
+			mediaType: "image/jpeg",
+			image: imageData,
+		});
+	});
+
 	it("runs registered message builders and API-safe normalization before model calls", async () => {
 		const build = vi.fn(async (messages) => [
 			...messages,
@@ -1023,6 +1109,31 @@ it.each([
 
 	expect(configs[0]?.toolContextMetadata).toEqual(
 		expect.objectContaining({ modelSupportsImages: true }),
+	);
+});
+
+it("fails clearly when Ollama receives an image for a model that explicitly lacks vision", async () => {
+	const { deps } = withCapturingFakeRuntime();
+	const session = new SessionRuntime(
+		makeAgentConfig({
+			providerId: "ollama",
+			modelId: "text-only",
+			knownModels: {
+				"text-only": {
+					id: "text-only",
+					capabilities: ["streaming", "tools"],
+				},
+			},
+		}),
+		deps,
+	);
+
+	await expect(
+		session.run("inspect this", [
+			"data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==",
+		]),
+	).rejects.toThrow(
+		/Ollama model "text-only" does not advertise image input/i,
 	);
 });
 

@@ -62,6 +62,23 @@ describe("Ollama media budget", () => {
 		});
 	});
 
+	it("ignores invalid media budget values instead of propagating NaN", () => {
+		const result = resolveOllamaRuntimeSettings({
+			modelId: "vision-model",
+			mediaBudget: {
+				maxImageEncodedBytes: Number.NaN,
+				maxImageDecodedBytes: Number.POSITIVE_INFINITY,
+				maxTotalMediaBytes: 0,
+			},
+		});
+
+		expect(result.providerConfig.mediaBudget).toEqual({
+			maxImageEncodedBytes: 12 * 1024 * 1024,
+			maxImageDecodedBytes: 8 * 1024 * 1024,
+			maxTotalMediaBytes: 24 * 1024 * 1024,
+		});
+	});
+
 	it("uses configured local media limits", () => {
 		const result = resolveOllamaRuntimeSettings({
 			modelId: "vision-model",

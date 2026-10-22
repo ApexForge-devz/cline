@@ -436,8 +436,17 @@ export class SessionRuntime {
 		const messageBuilderOptions = getMessageBuilderOptionsFromEnv();
 		this.maxCachedResultChars =
 			messageBuilderOptions.maxToolResultChars ?? DEFAULT_MAX_TOOL_RESULT_CHARS;
+		const providerConfig =
+			config.providerConfig && typeof config.providerConfig === "object"
+				? (config.providerConfig as {
+						mediaBudget?: import("@cline/shared").MediaBudgetOptions;
+				  })
+				: undefined;
 		this.messageBuilder = new MessageBuilder({
 			...messageBuilderOptions,
+			...(providerConfig?.mediaBudget
+				? { mediaBudget: providerConfig.mediaBudget }
+				: {}),
 			getToolResultRecovery: (result) =>
 				this.cacheableToolNames.has(result.name ?? "")
 					? { uri: this.toolResultCache.uriFor(result.tool_use_id) }
@@ -719,6 +728,7 @@ export class SessionRuntime {
 		userMessage: string,
 		userImages?: string[],
 		userFiles?: string[],
+		userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[],
 	): Promise<AgentResult> {
 		const rejection = this.getRunAdmissionError();
 		if (rejection) return Promise.reject(rejection);
@@ -728,6 +738,7 @@ export class SessionRuntime {
 			userMessage,
 			userImages,
 			userFiles,
+			userAttachmentMetadata,
 			isContinue: false,
 		});
 	}
@@ -736,6 +747,7 @@ export class SessionRuntime {
 		userMessage?: string,
 		userImages?: string[],
 		userFiles?: string[],
+		userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[],
 	): Promise<AgentResult> {
 		const rejection = this.getRunAdmissionError();
 		if (rejection) return Promise.reject(rejection);
@@ -743,6 +755,7 @@ export class SessionRuntime {
 			userMessage,
 			userImages,
 			userFiles,
+			userAttachmentMetadata,
 			isContinue: true,
 		});
 	}
@@ -786,6 +799,7 @@ export class SessionRuntime {
 		userMessage?: string;
 		userImages?: string[];
 		userFiles?: string[];
+		userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[];
 		isContinue: boolean;
 	}): Promise<AgentResult> {
 		let activePromise!: Promise<AgentResult>;
@@ -864,6 +878,7 @@ export class SessionRuntime {
 		userMessage?: string;
 		userImages?: string[];
 		userFiles?: string[];
+		userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[];
 		isContinue: boolean;
 	}): Promise<AgentResult> {
 		const result = await this.executeRunInternal(input);
@@ -889,6 +904,7 @@ export class SessionRuntime {
 		userMessage?: string;
 		userImages?: string[];
 		userFiles?: string[];
+		userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[];
 		isContinue: boolean;
 	}): Promise<AgentResult> {
 		if (this.shutdownCalled) {
@@ -942,6 +958,9 @@ export class SessionRuntime {
 				id: crypto.randomUUID(),
 				role: "user",
 				content,
+				...(input.userAttachmentMetadata?.length
+					? { metadata: { attachments: input.userAttachmentMetadata } }
+					: {}),
 			});
 		}
 
@@ -977,6 +996,15 @@ export class SessionRuntime {
 		}
 		const conversationId = this.conversation.getConversationId();
 		const modelInfo = tryGetModelInfo(this.config);
+		if (
+			this.config.providerId === "ollama" &&
+			input.userImages?.length &&
+			modelInfo?.capabilities?.includes("images") === false
+		) {
+			throw new Error(
+				`Ollama model "${this.config.modelId}" does not advertise image input. Refresh the Ollama model list or choose a vision-capable model.`,
+			);
+		}
 		const dedicatedImageGeneration = usesImageGenerationOperation(
 			modelInfo ?? {},
 		);

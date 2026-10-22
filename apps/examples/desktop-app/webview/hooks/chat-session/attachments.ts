@@ -1,4 +1,4 @@
-import { validateImageMedia } from "@cline/shared/browser";
+import { validateImageMedia, type ChatAttachmentMetadata } from "@cline/shared/browser";
 import type { ChatMessageImage } from "@/lib/chat-schema";
 import { imageAttachmentMediaType } from "@/lib/image-attachments";
 import type { SerializedAttachmentFile, SerializedAttachments } from "./types";
@@ -22,6 +22,7 @@ export async function serializeAttachments(
 ): Promise<SerializedAttachments> {
 	const userImages: string[] = [];
 	const userFiles: SerializedAttachmentFile[] = [];
+	const metadata: ChatAttachmentMetadata[] = [];
 
 	for (const file of files) {
 		const mediaType = imageAttachmentMediaType(file);
@@ -31,6 +32,12 @@ export async function serializeAttachments(
 			);
 			if (dataUrl) {
 				userImages.push(dataUrl);
+				metadata.push({
+					name: file.name,
+					kind: "image",
+					mediaType,
+					sizeBytes: file.size,
+				});
 			}
 			continue;
 		}
@@ -40,9 +47,15 @@ export async function serializeAttachments(
 			name: file.name,
 			content,
 		});
+		metadata.push({
+			name: file.name,
+			kind: "file",
+			...(file.type ? { mediaType: file.type } : {}),
+			sizeBytes: file.size,
+		});
 	}
 
-	return { userImages, userFiles };
+	return { userImages, userFiles, metadata };
 }
 
 export function toChatMessageImages(

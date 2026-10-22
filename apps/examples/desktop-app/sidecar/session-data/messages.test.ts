@@ -2,6 +2,61 @@ import { describe, expect, it } from "vitest";
 import { readSessionMessages } from "./messages";
 
 describe("readSessionMessages", () => {
+	it("restores persisted attachment metadata on the chat message", async () => {
+		const sessionId = `attachment-metadata-${Date.now()}`;
+		const liveSessions = new Map([
+			[
+				sessionId,
+				{
+					messages: [
+						{
+							id: "user-message",
+							role: "user",
+							content: [
+								{ type: "text", text: "Describe the image" },
+								{
+									type: "image",
+									mediaType: "image/jpeg",
+									data: "AQID",
+								},
+							],
+							metadata: {
+								attachments: [
+									{
+										name: "photo.jpg",
+										kind: "image",
+										mediaType: "image/jpeg",
+										sizeBytes: 3,
+									},
+								],
+							},
+							ts: 123,
+						},
+					],
+				},
+			],
+		]);
+
+		await expect(
+			readSessionMessages(
+				{ liveSessions } as Parameters<typeof readSessionMessages>[0],
+				sessionId,
+			),
+		).resolves.toEqual([
+			expect.objectContaining({
+				id: "user-message_text_0",
+				meta: expect.objectContaining({
+					attachments: [
+						expect.objectContaining({
+							name: "photo.jpg",
+							kind: "image",
+						}),
+					],
+				}),
+			}),
+		]);
+	});
+
 	it("restores persisted errors with the error display role", async () => {
 		const sessionId = "persisted-error";
 		const messages = JSON.parse(
@@ -314,6 +369,39 @@ describe("readSessionMessages", () => {
 						data: "aGVsbG8=",
 					},
 				],
+			}),
+		]);
+	});
+
+	it("preserves oversized persisted user images without attachment metadata", async () => {
+		const sessionId = `oversized-user-image-${Date.now()}`;
+		const data = "A".repeat(5 * 1024 * 1024 + 4);
+		const liveSessions = new Map([
+			[
+				sessionId,
+				{
+					messages: [
+						{
+							role: "user",
+							content: [
+								{ type: "text", text: "Describe this" },
+								{ type: "image", mediaType: "image/jpeg", data },
+							],
+						},
+					],
+				},
+			],
+		]);
+
+		const messages = await readSessionMessages(
+			{ liveSessions } as Parameters<typeof readSessionMessages>[0],
+			sessionId,
+		);
+
+		expect(messages[0]?.images).toEqual([
+			expect.objectContaining({
+				mediaType: "image/jpeg",
+				data,
 			}),
 		]);
 	});

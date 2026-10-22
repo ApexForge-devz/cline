@@ -1,7 +1,6 @@
 import { formatFileContentBlock } from "../prompt/format";
 import {
 	createMediaBudgetState,
-	DEFAULT_MAX_IMAGE_DECODED_BYTES,
 	DEFAULT_MAX_IMAGE_ENCODED_BYTES,
 	resolveMediaBudget,
 	type GeneratedMedia,
@@ -167,12 +166,17 @@ function isAiSdkContentBlockArray(
 	});
 }
 
-function imageOmittedTextPart(): { type: "text"; text: string } {
+function imageOmittedTextPart(
+	reason = "validation_or_budget_failure",
+): { type: "text"; text: string } {
+	console.log("[Cline Media Trace] AI SDK placeholder", { reason });
+	console.trace("[Cline Media Trace] AI SDK placeholder-origin");
 	return { type: "text", text: IMAGE_OMITTED_PLACEHOLDER };
 }
 
 function reserveRemoteImageUrlBudget(
 	state: MediaBudgetState,
+	budget: ResolvedMediaBudget,
 ): boolean {
 	// Remote URL byte size is unknown at formatting time, so charge the
 	// conservative per-image cap instead of letting URL media count as free.
@@ -181,8 +185,9 @@ function reserveRemoteImageUrlBudget(
 			DEFAULT_MAX_IMAGE_ENCODED_BYTES,
 			0,
 			{
-				maxImageEncodedBytes: DEFAULT_MAX_IMAGE_ENCODED_BYTES,
-				maxImageDecodedBytes: DEFAULT_MAX_IMAGE_DECODED_BYTES,
+				maxImageEncodedBytes: budget.maxImageEncodedBytes,
+				maxImageDecodedBytes: budget.maxImageDecodedBytes,
+				maxTotalMediaBytes: budget.maxTotalMediaBytes,
 			},
 			state,
 		) === null
@@ -214,11 +219,12 @@ function toToolResultImagePart(
 		{
 			maxImageEncodedBytes: budget.maxImageEncodedBytes,
 			maxImageDecodedBytes: budget.maxImageDecodedBytes,
+			maxTotalMediaBytes: budget.maxTotalMediaBytes,
 		},
 		state,
 	);
 	if (!validation.ok) {
-		return imageOmittedTextPart();
+		return imageOmittedTextPart("tool_result_image_validation_or_budget_failure");
 	}
 	return toolResultImagePart(validation.base64, validation.mediaType);
 }
@@ -235,21 +241,52 @@ function toolResultImagePart(
 }
 
 /**
- * Build a user-message media part. AI SDK 7 deprecated the `image` message
- * part in favour of a `file` part carrying an image `mediaType`, so this
- * always emits `file`. `mediaType` is required on `file` parts; when the
- * source did not carry one we fall back to the bare `image` top-level type,
- * which AI SDK 7 resolves per-provider (auto-detecting the subtype from
- * inline bytes where it can).
+ * AI SDK 7 `LanguageModelV4File` data is a tagged union. Keeping this
+ * representation local avoids coupling the shared formatter to the provider
+ * package while still emitting the exact v4 wire shape.
+ */
+type AiSdkFileData =
+	| { type: "data"; data: string | Uint8Array }
+	| { type: "url"; url: URL };
+
+/**
+ * Build a user-message media part using the canonical AI SDK 7 file-data
+ * representation. Inline strings are base64 payloads (or data URLs, which are
+ * normalized to base64); remote URLs use the tagged URL variant.
  */
 function userMediaPart(
 	data: string | Uint8Array | ArrayBuffer | URL,
 	mediaType: string | undefined,
 ): AiSdkMessagePart {
+	let fileData: AiSdkFileData;
+	if (data instanceof URL) {
+		fileData = { type: "url", url: data };
+	} else if (typeof data === "string") {
+		const protocol = parseUrlProtocol(data);
+		if (protocol === "http:" || protocol === "https:") {
+			fileData = { type: "url", url: new URL(data) };
+		} else {
+			const comma = data.indexOf(",");
+			const prefix = comma >= 0 ? data.slice(0, comma) : "";
+			const normalizedPrefix = prefix.toLowerCase();
+			const isBase64DataUrl =
+				normalizedPrefix.startsWith("data:") &&
+				normalizedPrefix.includes(";base64");
+			fileData = {
+				type: "data",
+				data: isBase64DataUrl ? data.slice(comma + 1) : data,
+			};
+		}
+	} else if (data instanceof ArrayBuffer) {
+		fileData = { type: "data", data: new Uint8Array(data) };
+	} else {
+		fileData = { type: "data", data };
+	}
+
 	return {
 		type: "file",
-		data,
-		mediaType: mediaType ?? "image",
+		data: fileData,
+		mediaType: mediaType ?? "image/png",
 	};
 }
 
@@ -266,11 +303,12 @@ function toUserImagePart(
 				{
 					maxImageEncodedBytes: budget.maxImageEncodedBytes,
 					maxImageDecodedBytes: budget.maxImageDecodedBytes,
+					maxTotalMediaBytes: budget.maxTotalMediaBytes,
 				},
 				state,
 			);
 			if (!validation.ok) {
-				return imageOmittedTextPart();
+				return imageOmittedTextPart("user_data_url_image_validation_or_budget_failure");
 			}
 			return userMediaPart(
 				`data:${validation.mediaType};base64,${validation.base64}`,
@@ -278,10 +316,10 @@ function toUserImagePart(
 			);
 		}
 		if (image.image.protocol !== "http:" && image.image.protocol !== "https:") {
-			return imageOmittedTextPart();
+			return imageOmittedTextPart("user_image_url_protocol_rejected");
 		}
-		if (!reserveRemoteImageUrlBudget(state)) {
-			return imageOmittedTextPart();
+		if (!reserveRemoteImageUrlBudget(state, budget)) {
+			return imageOmittedTextPart("user_remote_image_budget_failure");
 		}
 		return userMediaPart(image.image, image.mediaType);
 	}
@@ -289,8 +327,8 @@ function toUserImagePart(
 	if (typeof image.image === "string") {
 		const protocol = parseUrlProtocol(image.image);
 		if (protocol === "http:" || protocol === "https:") {
-			if (!reserveRemoteImageUrlBudget(state)) {
-				return imageOmittedTextPart();
+			if (!reserveRemoteImageUrlBudget(state, budget)) {
+				return imageOmittedTextPart("user_remote_string_image_budget_failure");
 			}
 			return userMediaPart(image.image, image.mediaType);
 		}
@@ -302,11 +340,12 @@ function toUserImagePart(
 			{
 				maxImageEncodedBytes: budget.maxImageEncodedBytes,
 				maxImageDecodedBytes: budget.maxImageDecodedBytes,
+				maxTotalMediaBytes: budget.maxTotalMediaBytes,
 			},
 			state,
 		);
 		if (!validation.ok) {
-			return imageOmittedTextPart();
+			return imageOmittedTextPart("user_string_image_validation_or_budget_failure");
 		}
 		return userMediaPart(
 			isDataUrl
@@ -326,13 +365,14 @@ function toUserImagePart(
 			encodedBytes,
 			decodedBytes,
 			{
-				maxImageEncodedBytes: DEFAULT_MAX_IMAGE_ENCODED_BYTES,
-				maxImageDecodedBytes: DEFAULT_MAX_IMAGE_DECODED_BYTES,
+				maxImageEncodedBytes: budget.maxImageEncodedBytes,
+				maxImageDecodedBytes: budget.maxImageDecodedBytes,
+				maxTotalMediaBytes: budget.maxTotalMediaBytes,
 			},
 			state,
 		)
 	) {
-		return imageOmittedTextPart();
+		return imageOmittedTextPart("user_binary_image_validation_or_budget_failure");
 	}
 
 	return userMediaPart(image.image, mediaType);
@@ -669,6 +709,15 @@ export function formatMessagesForAiSdk(
 	const mediaBudget = resolveMediaBudget(options?.mediaBudget);
 	const supportsImages =
 		!supportedInputModalities || supportedInputModalities.includes("image");
+	console.log("[Cline Media Trace] formatMessagesForAiSdk:start", {
+		messageCount: messages.length,
+		systemContentType: typeof systemContent,
+		supportedInputModalities: supportedInputModalities ?? null,
+		supportsImages,
+		maxImageEncodedBytes: mediaBudget.maxImageEncodedBytes,
+		maxImageDecodedBytes: mediaBudget.maxImageDecodedBytes,
+		maxTotalMediaBytes: mediaBudget.maxTotalMediaBytes,
+	});
 	const result: AiSdkMessage[] = [];
 	const mediaState = createMediaBudgetState();
 	const pendingAssistantMedia: Array<
@@ -894,5 +943,12 @@ export function formatMessagesForAiSdk(
 		});
 	}
 
+	console.log("[Cline Media Trace] formatMessagesForAiSdk:complete", {
+		resultMessageCount: result.length,
+		keptImages: mediaState.keptImages,
+		omittedImages: mediaState.omittedImages,
+		omittedReasons: mediaState.omittedReasons,
+		totalEncodedBytes: mediaState.totalEncodedBytes,
+	});
 	return result;
 }

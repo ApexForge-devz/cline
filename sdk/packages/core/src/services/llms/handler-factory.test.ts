@@ -429,6 +429,41 @@ describe("createAgentModelFromConfig", () => {
 		);
 	});
 
+	it("forwards provider media budget into the gateway provider config", async () => {
+		const { createAgentModelFromConfig } = await import("./handler-factory");
+		const mediaBudget = {
+			maxImageEncodedBytes: 12 * 1024 * 1024,
+			maxImageDecodedBytes: 8 * 1024 * 1024,
+			maxTotalMediaBytes: 24 * 1024 * 1024,
+		};
+
+		createAgentModelFromConfig(
+			{
+				providerId: "ollama",
+				modelId: "qwen3.5:2b",
+				systemPrompt: "",
+				tools: [],
+				providerConfig: {
+					providerId: "ollama",
+					modelId: "qwen3.5:2b",
+					mediaBudget,
+				},
+			},
+			undefined,
+		);
+
+		expect(gatewayMock.createGateway).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				providerConfigs: [
+					expect.objectContaining({
+						providerId: "ollama",
+						mediaBudget,
+					}),
+				],
+			}),
+		);
+	});
+
 	it("projects providers.json contextWindow (maxInputTokens) onto the selected gateway model", async () => {
 		const { createAgentModelFromConfig } = await import("./handler-factory");
 

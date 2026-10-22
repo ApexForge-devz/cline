@@ -1518,6 +1518,50 @@ describe("ChatMessages image attachments", () => {
 		expect(image?.className).toContain("max-h-56.25");
 		expect(image?.className).toContain("max-w-56.25");
 		expect(container.textContent).toContain("Describe this");
+		const markdownText = Array.from(container.querySelectorAll("div")).find(
+			(element) => element.textContent === "Describe this",
+		);
+		expect(markdownText).toBeDefined();
+		expect(
+			image?.compareDocumentPosition(markdownText as Node) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+	});
+
+	it("renders attachment identity for images and files", async () => {
+		await renderMessages([
+			{
+				id: "user-attachments",
+				sessionId: "session-1",
+				role: "user",
+				content: "Review these files",
+				images: [
+					{ id: "image-1", mediaType: "image/jpeg", data: "aGVsbG8=" },
+				],
+				meta: {
+					attachments: [
+						{
+							name: "1067106.jpg",
+							kind: "image",
+							mediaType: "image/jpeg",
+							sizeBytes: 4096,
+						},
+						{
+							name: "MyScript.cs",
+							kind: "file",
+							mediaType: "text/plain",
+							sizeBytes: 14 * 1024,
+						},
+					],
+				},
+				createdAt: 1,
+			},
+		]);
+
+		expect(container.textContent).toContain("1067106.jpg");
+		expect(container.textContent).toContain("4.0 KB");
+		expect(container.textContent).toContain("MyScript.cs");
+		expect(container.textContent).toContain("CS · 14 KB");
 	});
 
 	it("renders an image-only assistant response", async () => {

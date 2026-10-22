@@ -253,6 +253,7 @@ export interface SendSessionInput {
 	mode?: AgentMode;
 	userImages?: string[];
 	userFiles?: string[];
+	userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[];
 	delivery?: "queue" | "steer";
 	timeoutMs?: number;
 }

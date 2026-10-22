@@ -68,6 +68,50 @@ export function normalizeOllamaBaseUrl(
  */
 export const OLLAMA_DEFAULT_TIMEOUT_MS = OLLAMA_DEFAULT_RESPONSE_START_TIMEOUT_MS;
 
+function summarizeOllamaChatRequest(
+	input: unknown,
+	body: unknown,
+): Record<string, unknown> {
+	let url: string | undefined;
+	if (typeof input === "string") {
+		url = input;
+	} else if (input instanceof URL) {
+		url = input.href;
+	} else if (input && typeof input === "object") {
+		const candidate = (input as { url?: unknown }).url;
+		if (typeof candidate === "string") url = candidate;
+	}
+	if (typeof body !== "string") {
+		return { url, bodyType: typeof body };
+	}
+	try {
+		const parsed = JSON.parse(body) as Record<string, unknown>;
+		const rawMessages = Array.isArray(parsed.messages) ? parsed.messages : [];
+		const imageChars: number[] = [];
+		let imageCount = 0;
+		for (const message of rawMessages) {
+			if (!message || typeof message !== "object") continue;
+			const images = (message as { images?: unknown }).images;
+			if (!Array.isArray(images)) continue;
+			for (const image of images) {
+				if (typeof image === "string") {
+					imageCount += 1;
+					imageChars.push(image.length);
+				}
+			}
+		}
+		return {
+			url,
+			bodyChars: body.length,
+			messageCount: rawMessages.length,
+			imageCount,
+			imageChars,
+		};
+	} catch {
+		return { url, bodyChars: body.length, parseError: true };
+	}
+}
+
 /**
  * Read the configured request timeout (the legacy `requestTimeoutMs`
  * setting); zero/invalid values fall back to the default.
@@ -114,8 +158,17 @@ export function withOllamaResponseTimeout(
 		const signal = upstreamSignal
 			? AbortSignal.any([upstreamSignal, timeoutController.signal])
 			: timeoutController.signal;
+		console.log(
+			"[Cline Media Trace] ollama:fetch",
+			summarizeOllamaChatRequest(input, init?.body),
+		);
 		try {
-			return await baseFetch(input, { ...init, signal });
+			const response = await baseFetch(input, { ...init, signal });
+			console.log("[Cline Media Trace] ollama:response", {
+				status: response.status,
+				ok: response.ok,
+			});
+			return response;
 		} finally {
 			clearTimeout(timer);
 		}

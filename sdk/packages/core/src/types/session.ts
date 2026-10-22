@@ -72,6 +72,7 @@ export type PendingPrompt = {
 	delivery: "queue" | "steer";
 	userImages?: string[];
 	userFiles?: string[];
+	userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[];
 };
 
 export type TeamRunUpdate = {
@@ -89,6 +90,7 @@ export type PreparedTurnInput = {
 	prompt: string;
 	userImages?: string[];
 	userFiles?: string[];
+	userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[];
 };
 
 // ── Persistence interfaces ────────────────────────────────────────────

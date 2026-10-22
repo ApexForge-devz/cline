@@ -603,6 +603,112 @@ describe("sdk-gateway", () => {
 		);
 	});
 
+	it("preserves provider media budget through the resolved gateway context", async () => {
+		const mediaBudget = {
+			maxImageEncodedBytes: 12 * 1024 * 1024,
+			maxImageDecodedBytes: 8 * 1024 * 1024,
+			maxTotalMediaBytes: 24 * 1024 * 1024,
+		};
+		const createProvider = vi.fn((config) => ({
+			async *stream() {
+				expect(config.mediaBudget).toEqual(mediaBudget);
+				yield { type: "finish", reason: "stop" } satisfies AgentModelEvent;
+			},
+		}));
+		const gateway = createGateway({
+			builtins: false,
+			providers: [
+				{
+					manifest: {
+						id: "media-budget-provider",
+						name: "Media Budget Provider",
+						defaultModelId: "alpha",
+						models: [
+							{
+								id: "alpha",
+								name: "Alpha",
+								providerId: "media-budget-provider",
+							},
+						],
+					},
+					createProvider,
+				},
+			],
+			providerConfigs: [
+				{ providerId: "media-budget-provider", mediaBudget },
+			],
+		});
+
+		await collect(
+			await gateway.stream({
+				providerId: "media-budget-provider",
+				modelId: "alpha",
+				messages: baseMessages,
+			}),
+		);
+
+		expect(createProvider).toHaveBeenCalledWith(
+			expect.objectContaining({ mediaBudget }),
+		);
+	});
+
+	it("keeps large user images when the provider media budget allows them", async () => {
+		mockSuccessfulStream();
+		const mediaBudget = {
+			maxImageEncodedBytes: 12 * 1024 * 1024,
+			maxImageDecodedBytes: 8 * 1024 * 1024,
+			maxTotalMediaBytes: 24 * 1024 * 1024,
+		};
+		const imageData = "A".repeat(
+			Math.ceil((4 * 1024 * 1024) / 3) * 4,
+		);
+		const gateway = createGateway({
+			providerConfigs: [
+				{
+					providerId: "openai-native",
+					apiKey: "test-key",
+					mediaBudget,
+					models: [
+						{
+							id: "vision-budget-test",
+							name: "Vision Budget Test",
+							modalities: { input: ["text", "image"], output: ["text"] },
+						},
+					],
+				},
+			],
+		});
+
+		await collect(
+			await gateway.stream({
+				providerId: "openai-native",
+				modelId: "vision-budget-test",
+				messages: [
+					{
+						id: "user-large-image",
+						role: "user",
+						content: [
+							{ type: "text", text: "Describe this image." },
+							{
+								type: "image",
+								image: imageData,
+								mediaType: "image/jpeg",
+							},
+						],
+						createdAt: Date.now(),
+					},
+				],
+			}),
+		);
+
+		const call = streamTextSpy.mock.calls.at(-1)?.[0] as
+			| { messages?: unknown }
+			| undefined;
+		const serialized = JSON.stringify(call?.messages);
+		expect(serialized).toContain(imageData);
+		expect(serialized).not.toContain(IMAGE_UNSUPPORTED_PLACEHOLDER);
+	});
+
 	it("passes AI SDK 7 telemetry and correlation context to streamText", async () => {
 		mockSuccessfulStream();
 		const gateway = createGateway({

@@ -372,6 +372,8 @@ export { CLINE_DEFAULT_RPC_ADDRESS, CLINE_DEFAULT_RPC_PORT } from "./rpc";
 export type {
 	AddProviderActionRequest,
 	ChatAttachmentFile,
+	ChatAttachmentKind,
+	ChatAttachmentMetadata,
 	ChatAttachments,
 	ChatRunTurnRequest,
 	ChatRuntimeConfig,

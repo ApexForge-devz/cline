@@ -27,6 +27,7 @@ import {
 	addLocalProvider,
 	createConfiguredStreamingTranscriptionSession,
 	deleteLocalProvider,
+	getLocalProviderModelInfo,
 	getLocalProviderModels,
 	getLocalTranscriptionModels,
 	isDedicatedTranscriptionModel,
@@ -169,6 +170,44 @@ describe("live provider model loading", () => {
 		const result = await getLocalProviderModels("opencode");
 		expect(result.models.find((model) => model.id === "live-model")?.name).toBe(
 			"Custom name",
+		);
+	});
+
+	it("returns authoritative Ollama model info including vision capability", async () => {
+		const fetchMock = vi.fn(async (url: string) => {
+			if (url.endsWith("/api/tags")) {
+				return Response.json({
+					models: [{ name: "qwen3.5:2b", digest: "digest-1" }],
+				});
+			}
+			if (url.endsWith("/api/show")) {
+				return Response.json({
+					capabilities: ["completion", "tools", "vision", "thinking"],
+					thinking: true,
+					model_info: { "qwen35.context_length": 256000 },
+				});
+			}
+			throw new Error(`unexpected URL: ${url}`);
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const info = await getLocalProviderModelInfo(
+			"ollama",
+			{
+				providerId: "ollama",
+				modelId: "qwen3.5:2b",
+				baseUrl: "http://localhost:11434/v1",
+			},
+			"qwen3.5:2b",
+		);
+
+		expect(info).toEqual(
+			expect.objectContaining({
+				id: "qwen3.5:2b",
+				contextWindow: 256000,
+				capabilities: ["streaming", "tools", "images", "reasoning"],
+				modalities: { input: ["text", "image"], output: ["text"] },
+			}),
 		);
 	});
 
@@ -2449,6 +2488,32 @@ describe("saveLocalProviderSettings", () => {
 		const settings = manager.getProviderSettings("test-provider");
 		expect(settings?.gcp?.projectId).toBeUndefined();
 		expect(settings?.gcp?.region).toBe("us-central1");
+	});
+
+	it("merges and clears nested media budget fields", async () => {
+		await saveLocalProviderSettings(manager, {
+			providerId: "test-provider",
+			enabled: true,
+			mediaBudget: {
+				maxImageEncodedBytes: 12 * 1024 * 1024,
+				maxImageDecodedBytes: 8 * 1024 * 1024,
+				maxTotalMediaBytes: 24 * 1024 * 1024,
+			},
+		});
+
+		await saveLocalProviderSettings(manager, {
+			providerId: "test-provider",
+			enabled: true,
+			mediaBudget: {
+				maxTotalMediaBytes: null as never,
+			},
+		});
+
+		const settings = manager.getProviderSettings("test-provider");
+		expect(settings?.mediaBudget).toEqual({
+			maxImageEncodedBytes: 12 * 1024 * 1024,
+			maxImageDecodedBytes: 8 * 1024 * 1024,
+		});
 	});
 
 	it("passes through scalar fields like maxTokens and timeout", async () => {

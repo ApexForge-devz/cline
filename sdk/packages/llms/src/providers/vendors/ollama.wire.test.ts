@@ -19,6 +19,7 @@ import type {
 	LanguageModelV4Prompt,
 	LanguageModelV4StreamPart,
 } from "@ai-sdk/provider";
+import { formatMessagesForAiSdk } from "@cline/shared";
 import type {
 	GatewayProviderContext,
 	GatewayResolvedProviderConfig,
@@ -120,7 +121,77 @@ function userText(text: string): LanguageModelV4Prompt {
 	return [{ role: "user", content: [{ type: "text", text }] }];
 }
 
+function clineFormattedUserImage(
+	image: string,
+	mediaType: string,
+): LanguageModelV4Prompt {
+	return formatMessagesForAiSdk(
+		undefined,
+		[
+			{
+				role: "user",
+				content: [
+					{ type: "text", text: "Describe this image." },
+					{ type: "image", image, mediaType },
+				],
+			},
+		],
+		{ supportedInputModalities: ["text", "image"] },
+	) as unknown as LanguageModelV4Prompt;
+}
+
 describe("ollama wire contract (real provider package)", () => {
+
+	it("sends a 4 MiB local image through native Ollama images[]", async () => {
+		const image = Buffer.alloc(4 * 1024 * 1024, 7).toString("base64");
+		const prompt = formatMessagesForAiSdk(
+			undefined,
+			[{
+				role: "user",
+				content: [
+					{ type: "text", text: "Describe this image." },
+					{ type: "image", image, mediaType: "image/jpeg" },
+				],
+			}],
+			{
+				supportedInputModalities: ["text", "image"],
+				mediaBudget: {
+					maxImageEncodedBytes: 12 * 1024 * 1024,
+					maxTotalMediaBytes: 12 * 1024 * 1024,
+				},
+			},
+		) as unknown as LanguageModelV4Prompt;
+		const { requests } = await streamThroughVendor({
+			responseLines: [textChunk("visual answer"), DONE_CHUNK],
+			prompt,
+		});
+
+		const [message] = requests[0].messages;
+		expect(message.role).toBe("user");
+		expect(message.content).toBe("Describe this image.");
+		expect(message.images).toEqual([image]);
+		expect(typeof message.images?.[0]).toBe("string");
+		expect((message.images?.[0] as string).length).toBe(image.length);
+		expect(JSON.stringify(message)).not.toContain(
+			"[media omitted: invalid or exceeds size limit]",
+		);
+	});
+
+	it("sends Cline-formatted user images through native Ollama images[]", async () => {
+		const image = Buffer.alloc(16, 7).toString("base64");
+		const { requests } = await streamThroughVendor({
+			responseLines: [textChunk("visual answer"), DONE_CHUNK],
+			prompt: clineFormattedUserImage(image, "image/png"),
+		});
+
+		const [message] = requests[0].messages;
+		expect(message.role).toBe("user");
+		expect(message.content).toBe("Describe this image.");
+		expect(message.images).toEqual([image]);
+		expect(JSON.stringify(message)).not.toContain(
+			"[media omitted: invalid or exceeds size limit]",
+		);
+	});
 	it("omits think from the request when no reasoning setting is given", async () => {
 		const { requests } = await streamThroughVendor({
 			responseLines: [textChunk("hi"), DONE_CHUNK],
@@ -156,6 +227,60 @@ describe("ollama wire contract (real provider package)", () => {
 			providerOptions: { ollama: { options: { num_ctx: 65536 } } },
 		});
 		expect(requests[0].options).toEqual({ num_ctx: 65536 });
+	});
+
+	it.each([
+		["image/jpeg", "aGVsbG8taW1hZ2UtanBlZw=="],
+		["image/png", "aGVsbG8taW1hZ2UtcG5n"],
+		["image/webp", "aGVsbG8taW1hZ2Utd2VicA=="],
+	])("sends %s user images as native Ollama image data", async (mediaType, data) => {
+		const { requests } = await streamThroughVendor({
+			responseLines: [textChunk("visible"), DONE_CHUNK],
+			prompt: [
+				{
+					role: "user",
+					content: [
+						{
+							type: "file",
+							mediaType,
+							data: { type: "data", data },
+						},
+					],
+				},
+			],
+		});
+
+		const [message] = requests[0].messages;
+		expect(message.role).toBe("user");
+		expect(message.images).toEqual([data]);
+		expect(message.content).not.toContain("[media omitted");
+	});
+
+	it("keeps multiple user images distinct at the Ollama wire boundary", async () => {
+		const first = "Zmlyc3QtaW1hZ2U=";
+		const second = "c2Vjb25kLWltYWdl";
+		const { requests } = await streamThroughVendor({
+			responseLines: [textChunk("visible"), DONE_CHUNK],
+			prompt: [
+				{
+					role: "user",
+					content: [
+						{
+							type: "file",
+							mediaType: "image/jpeg",
+							data: { type: "data", data: first },
+						},
+						{
+							type: "file",
+							mediaType: "image/png",
+							data: { type: "data", data: second },
+						},
+					],
+				},
+			],
+		});
+
+		expect(requests[0].messages[0].images).toEqual([first, second]);
 	});
 
 	it("serializes an attachment-only user turn with string content", async () => {

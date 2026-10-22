@@ -12,6 +12,7 @@ import {
 	createUserInstructionConfigService,
 	findCheckpointForRun,
 	getCoreBuiltinToolCatalog,
+	getLocalProviderModelInfo,
 	isSessionNotFoundError,
 	isSkillsToolAvailable,
 	ProviderSettingsManager,
@@ -1120,6 +1121,122 @@ async function withRemoteProviderCredentials(
 	};
 }
 
+async function hydrateOllamaModelInfo(
+	config: JsonRecord,
+): Promise<JsonRecord> {
+	const providerId = String(config.provider ?? config.providerId ?? "")
+		.trim()
+		.toLowerCase();
+	const modelId = String(config.model ?? config.modelId ?? "").trim();
+	if (providerId !== "ollama" || !modelId) return config;
+
+	const incomingProviderConfig =
+		config.providerConfig &&
+		typeof config.providerConfig === "object" &&
+		!Array.isArray(config.providerConfig)
+			? { ...(config.providerConfig as JsonRecord) }
+			: {};
+	const existingModelInfo = incomingProviderConfig.modelInfo;
+	// A model id alone is not a usable capability contract. Desktop sessions
+	// can carry stale text-only metadata for the same model id, which would
+	// make the provider formatter silently replace a real image with the
+	// unsupported-media placeholder. Always re-resolve Ollama model metadata;
+	// the Ollama model resolver is digest/cached, so this does not imply a full
+	// network fetch on every turn.
+
+	const providerSettingsManager = new ProviderSettingsManager();
+	const providerConfig =
+		providerSettingsManager.getProviderConfig(providerId, {
+			includeKnownModels: false,
+			modelId,
+		}) ?? {
+			providerId,
+			modelId,
+		};
+
+	// The active Desktop session can carry fresher connection fields than the
+	// persisted provider entry. Prefer those for the metadata request without
+	// altering any other runtime settings.
+	if (typeof config.baseUrl === "string" && config.baseUrl.trim()) {
+		providerConfig.baseUrl = config.baseUrl.trim();
+	}
+	if (typeof config.apiKey === "string" && config.apiKey.trim()) {
+		providerConfig.apiKey = config.apiKey.trim();
+	}
+	if (config.headers && typeof config.headers === "object" && !Array.isArray(config.headers)) {
+		providerConfig.headers = config.headers as Record<string, string>;
+	}
+
+	try {
+		const modelInfo = await getLocalProviderModelInfo(
+			providerId,
+			providerConfig,
+			modelId,
+			{ loadLatest: true },
+		);
+		if (!modelInfo) {
+			const existingModelInfo = incomingProviderConfig.modelInfo;
+			if (
+				existingModelInfo &&
+				typeof existingModelInfo === "object" &&
+				!Array.isArray(existingModelInfo) &&
+				String((existingModelInfo as JsonRecord).id ?? "").trim() === modelId
+			) {
+				const failOpenModelInfo = { ...(existingModelInfo as JsonRecord) };
+				delete failOpenModelInfo.capabilities;
+				delete failOpenModelInfo.modalities;
+				return {
+					...config,
+					providerConfig: {
+						// Keep the fully-resolved provider connection (including media
+						// budgets and native Ollama settings) while clearing only the
+						// stale capability fields.
+						...providerConfig,
+						...incomingProviderConfig,
+						modelInfo: failOpenModelInfo,
+					},
+				};
+			}
+			return config;
+		}
+		return {
+			...config,
+			providerConfig: {
+				// Start from the resolved provider config so Ollama-specific defaults
+				// such as the 12 MiB per-image / 24 MiB aggregate media budget are
+				// retained alongside the freshly resolved model contract.
+				...providerConfig,
+				...incomingProviderConfig,
+				modelInfo,
+			},
+		};
+	} catch {
+		// Metadata discovery must not prevent a local session from starting.
+		// An older cached model contract is not proof of the current model's
+		// capabilities, so discard capability/modality fields and fail open.
+		const existingModelInfo = incomingProviderConfig.modelInfo;
+		if (
+			existingModelInfo &&
+			typeof existingModelInfo === "object" &&
+			!Array.isArray(existingModelInfo) &&
+			String((existingModelInfo as JsonRecord).id ?? "").trim() === modelId
+		) {
+			const failOpenModelInfo = { ...(existingModelInfo as JsonRecord) };
+			delete failOpenModelInfo.capabilities;
+			delete failOpenModelInfo.modalities;
+			return {
+				...config,
+				providerConfig: {
+					...providerConfig,
+					...incomingProviderConfig,
+					modelInfo: failOpenModelInfo,
+				},
+			};
+		}
+		return config;
+	}
+}
+
 function getSessionManager(
 	ctx: SidecarContext,
 	sessionId?: string,
@@ -1144,10 +1261,14 @@ async function handleStart(
 		readEnvironmentId(request.config),
 	);
 	const manager = binding.sessionManager;
-	const config =
+	const rawConfig =
 		binding.kind === "ssh"
 			? await withRemoteProviderCredentials(request.config)
 			: request.config;
+	const config =
+		binding.kind === "ssh"
+			? rawConfig
+			: await hydrateOllamaModelInfo(rawConfig);
 	// Workspace discovery must happen where the files live. Local desktop
 	// sessions keep the eager prompt path; SSH sessions leave a blank prompt for
 	// the remote Hub's LocalRuntimeHost bootstrap to compose from remote metadata.
@@ -1557,9 +1678,12 @@ async function handleSend(
 	if (!delivery && session?.busy) {
 		delivery = "queue";
 	}
-	const nextConfig = request.config
+	const mergedConfig = request.config
 		? mergeSessionConfig(session?.config ?? {}, request.config)
 		: session?.config;
+	const nextConfig = mergedConfig
+		? await hydrateOllamaModelInfo(mergedConfig)
+		: mergedConfig;
 	const providerChanged = Boolean(
 		session &&
 			request.config &&
@@ -1642,6 +1766,7 @@ async function handleSend(
 				delivery: "queue",
 				userImages: request.attachments?.userImages,
 				userFiles,
+				userAttachmentMetadata: request.attachments?.metadata,
 			});
 			const prompts = await manager.pendingPrompts.list({ sessionId });
 			trackQueuedAttachments(session, prompts, userFiles);
@@ -1682,6 +1807,7 @@ async function handleSend(
 				delivery,
 				userImages: request.attachments?.userImages,
 				userFiles,
+				userAttachmentMetadata: request.attachments?.metadata,
 			});
 		} catch (error) {
 			deleteMaterializedAttachments(sessionId, userFiles);

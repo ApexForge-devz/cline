@@ -422,6 +422,8 @@ export {
 export type {
 	AddProviderActionRequest,
 	ChatAttachmentFile,
+	ChatAttachmentKind,
+	ChatAttachmentMetadata,
 	ChatAttachments,
 	ChatRunTurnRequest,
 	ChatRuntimeConfig,

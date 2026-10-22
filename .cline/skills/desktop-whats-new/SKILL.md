@@ -1,6 +1,12 @@
 ---
 name: desktop-whats-new
-description: Use when the team wants to catch desktop app users up on recent features with a one-time "What's new" dialog (apps/examples/desktop-app). Guides deciding whether a catch-up is warranted, picking the highlights from the changelog, writing tight copy, adding the entry to webview/lib/whats-new-content.ts, and previewing it from Settings → About. Not for individual releases — those only appear on the About page's release notes.
+description: Use when the team wants to catch desktop app users up on recent
+  features with a one-time "What's new" dialog (apps/examples/desktop-app).
+  Guides deciding whether a catch-up is warranted, picking the highlights from
+  the changelog, writing tight copy, adding the entry to
+  webview/lib/whats-new-content.ts, and previewing it from Settings → About. Not
+  for individual releases — those only appear on the About page's release notes.
+disabled: true
 ---
 
 # Desktop "What's new" catch-up

@@ -145,6 +145,7 @@ function reserveUnknownUrlMediaBudget(
 				{
 					maxImageEncodedBytes: budget.maxImageEncodedBytes,
 					maxImageDecodedBytes: budget.maxImageDecodedBytes,
+					maxTotalMediaBytes: budget.maxTotalMediaBytes,
 				},
 				mediaState,
 			) === null
@@ -164,6 +165,7 @@ function reserveUnknownUrlMediaBudget(
 			{
 				maxImageEncodedBytes: budget.maxImageEncodedBytes,
 				maxImageDecodedBytes: budget.maxImageDecodedBytes,
+				maxTotalMediaBytes: budget.maxTotalMediaBytes,
 			},
 			mediaState,
 		) === null
@@ -203,6 +205,7 @@ function reserveGenericMediaDataBudget(
 			{
 				maxImageEncodedBytes: budget.maxImageEncodedBytes,
 				maxImageDecodedBytes: budget.maxImageDecodedBytes,
+				maxTotalMediaBytes: budget.maxTotalMediaBytes,
 			},
 			mediaState,
 		) === null
@@ -246,6 +249,7 @@ function splitContentOutputMedia(
 				{
 					maxImageEncodedBytes: budget.maxImageEncodedBytes,
 					maxImageDecodedBytes: budget.maxImageDecodedBytes,
+					maxTotalMediaBytes: budget.maxTotalMediaBytes,
 				},
 				mediaState,
 			);
@@ -274,6 +278,7 @@ function splitContentOutputMedia(
 					{
 						maxImageEncodedBytes: budget.maxImageEncodedBytes,
 						maxImageDecodedBytes: budget.maxImageDecodedBytes,
+						maxTotalMediaBytes: budget.maxTotalMediaBytes,
 					},
 					mediaState,
 				);

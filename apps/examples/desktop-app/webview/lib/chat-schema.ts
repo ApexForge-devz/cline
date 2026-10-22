@@ -97,6 +97,13 @@ export const ChatMessageImageSchema = z.object({
 
 export const ChatMessageMediaSchema = GeneratedMediaSchema;
 
+export const ChatMessageAttachmentSchema = z.object({
+	name: z.string().min(1),
+	kind: z.enum(["image", "file", "other"]),
+	mediaType: z.string().min(1).optional(),
+	sizeBytes: z.number().int().nonnegative().optional(),
+});
+
 export const ChatMessageSchema = z.object({
 	id: z.string().min(1),
 	sessionId: z.string().nullable(),
@@ -129,6 +136,7 @@ export const ChatMessageSchema = z.object({
 			providerId: z.string().optional(),
 			providerAuth: ProviderAuthInfoSchema.optional(),
 			modelId: z.string().optional(),
+			attachments: z.array(ChatMessageAttachmentSchema).optional(),
 			userRunSpan: z.number().int().nonnegative().optional(),
 			runCount: z.number().int().positive().optional(),
 			checkpoint: z
@@ -163,6 +171,7 @@ export type ChatSessionConfig = z.infer<typeof ChatSessionConfigSchema>;
 export type ChatSessionStatus = z.infer<typeof ChatSessionStatusSchema>;
 export type ChatMessageImage = z.infer<typeof ChatMessageImageSchema>;
 export type ChatMessageMedia = z.infer<typeof ChatMessageMediaSchema>;
+export type ChatMessageAttachment = z.infer<typeof ChatMessageAttachmentSchema>;
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export type ChatSummary = z.infer<typeof ChatSummarySchema>;
 export type ChatViewState = z.infer<typeof ChatViewStateSchema>;

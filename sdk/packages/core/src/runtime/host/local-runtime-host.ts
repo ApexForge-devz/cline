@@ -1105,6 +1105,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 				delivery,
 				userImages: input.userImages,
 				userFiles: input.userFiles,
+				userAttachmentMetadata: input.userAttachmentMetadata,
 			});
 			return undefined;
 		}
@@ -1114,6 +1115,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 				mode: input.mode,
 				userImages: input.userImages,
 				userFiles: input.userFiles,
+				userAttachmentMetadata: input.userAttachmentMetadata,
 			});
 			if (!session.interactive) {
 				await this.finalizeSingleRun(session, result.finishReason);
@@ -1739,6 +1741,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 			mode?: SendSessionInput["mode"];
 			userImages?: string[];
 			userFiles?: string[];
+			userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[];
 		},
 	): Promise<AgentResult> {
 		// An abort that arrived between turns targeted a run that had already
@@ -1784,6 +1787,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 				prompt,
 				preparedInput.userImages,
 				preparedInput.userFiles,
+				preparedInput.userAttachmentMetadata,
 			);
 
 			while (shouldAutoContinueTeamRuns(session, result.finishReason)) {
@@ -1914,6 +1918,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 		prompt: string,
 		userImages?: string[],
 		userFiles?: string[],
+		userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[],
 	): Promise<AgentResult> {
 		const shouldContinue =
 			session.started || session.agent.getMessages().length > 0;
@@ -1946,8 +1951,18 @@ export class LocalRuntimeHost implements RuntimeHost {
 		try {
 			const runFn = () => {
 				const run = shouldContinue
-					? session.agent.continue(prompt, userImages, userFiles)
-					: session.agent.run(prompt, userImages, userFiles);
+					? session.agent.continue(
+							prompt,
+							userImages,
+							userFiles,
+							userAttachmentMetadata,
+						)
+					: session.agent.run(
+							prompt,
+							userImages,
+							userFiles,
+							userAttachmentMetadata,
+						);
 				// The agent drops abort() while it has no run in flight, so a Stop
 				// that landed during this turn's preparation (persistence, git
 				// metadata, credential sync) never reached it and the turn would
@@ -2134,6 +2149,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 			mode?: SendSessionInput["mode"];
 			userImages?: string[];
 			userFiles?: string[];
+			userAttachmentMetadata?: import("@cline/shared").ChatAttachmentMetadata[];
 		},
 	): Promise<PreparedTurnInput> {
 		const mentionBaseDir = resolveWorkspacePath(session.config);
@@ -2146,6 +2162,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 					session.config.cwd,
 					input.userFiles,
 				),
+				userAttachmentMetadata: input.userAttachmentMetadata,
 			};
 		}
 
@@ -2175,6 +2192,7 @@ export class LocalRuntimeHost implements RuntimeHost {
 			prompt,
 			userImages: input.userImages,
 			userFiles: mergedUserFiles.length > 0 ? mergedUserFiles : undefined,
+			userAttachmentMetadata: input.userAttachmentMetadata,
 		};
 	}
 

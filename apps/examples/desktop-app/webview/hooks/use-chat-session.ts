@@ -30,7 +30,10 @@ import {
 	resolveCredentialError,
 	resolveCredentialFailureHint,
 } from "@/hooks/chat-session/helpers";
-import { canReplaceFailedTurn } from "@/hooks/chat-session/history-reconciliation";
+import {
+	canReplaceFailedTurn,
+	mergeUserAttachmentPresentation,
+} from "@/hooks/chat-session/history-reconciliation";
 import type {
 	AgentChunkEvent,
 	AskQuestionRequestItem,
@@ -208,16 +211,17 @@ function mergeHydratedMessagesWithLive(options: {
 	hydrationStartedAt: number;
 }): ChatMessage[] {
 	const { hydrated, current, sessionId, hydrationStartedAt } = options;
+	const hydratedWithPresentation = mergeUserAttachmentPresentation(current, hydrated);
 	const liveDuringHydration = current.filter(
 		(message) =>
 			message.sessionId === sessionId &&
 			message.createdAt >= hydrationStartedAt,
 	);
 	if (liveDuringHydration.length === 0) {
-		return hydrated;
+		return hydratedWithPresentation;
 	}
 	const hydratedKeyCounts = new Map<string, number>();
-	for (const message of hydrated) {
+	for (const message of hydratedWithPresentation) {
 		const key = `${message.role}\u0000${message.content}\u0000${message.reasoning ?? ""}`;
 		hydratedKeyCounts.set(key, (hydratedKeyCounts.get(key) ?? 0) + 1);
 	}
@@ -234,7 +238,10 @@ function mergeHydratedMessagesWithLive(options: {
 		}
 		return true;
 	});
-	return sortMessagesChronologically([...hydrated, ...nonDuplicateLive]);
+	return sortMessagesChronologically([
+		...hydratedWithPresentation,
+		...nonDuplicateLive,
+	]);
 }
 
 type CloudOptimisticState = {
@@ -975,7 +982,10 @@ export function useChatSession(environmentId: string) {
 				// until canonical history contains this run's terminal error.
 				if (!canReplaceFailedTurn(sessionMessages, historyMessages))
 					return prev;
-				return historyMessages;
+				return mergeUserAttachmentPresentation(
+					sessionMessages,
+					historyMessages,
+				);
 			});
 		},
 		[],
@@ -2883,6 +2893,27 @@ export function useChatSession(environmentId: string) {
 					sessionId: plannedSessionId,
 					role: "user",
 					content: userLabel,
+					...(attachedFiles.length
+						? {
+								meta: {
+									attachments: attachedFiles.map((file) => {
+										const mediaType = imageAttachmentMediaType(file);
+										return {
+											name: file.name,
+											kind: mediaType
+												? ("image" as const)
+												: ("file" as const),
+											...(mediaType
+												? { mediaType }
+												: file.type
+													? { mediaType: file.type }
+													: {}),
+											sizeBytes: file.size,
+										};
+									}),
+								},
+							}
+						: {}),
 					createdAt: now,
 				});
 				turnEpochRef.current += 1;
@@ -4167,6 +4198,21 @@ export function useChatSession(environmentId: string) {
 		[config, environmentId, postSession, status],
 	);
 
+	const compactSession = useCallback(async (): Promise<string> => {
+		const activeSessionId = activeSessionIdRef.current;
+		if (!activeSessionId) throw new Error("No active session to compact.");
+		if (BUSY_STATUSES.has(status)) {
+			throw new Error("Wait for the current turn to finish before compacting.");
+		}
+		const payload = (await postSession({
+			action: "compact",
+			sessionId: activeSessionId,
+			config,
+		})) as { text?: string; ok?: boolean };
+		if (payload.ok !== true) throw new Error(payload.text || "Compaction failed.");
+		return payload.text?.trim() || "Context compacted.";
+	}, [config, postSession, status]);
+
 	const steerPromptInQueue = useCallback(
 		async (promptId?: string) => {
 			const activeSessionId = activeSessionIdRef.current;
@@ -4307,6 +4353,7 @@ export function useChatSession(environmentId: string) {
 		steerPromptInQueue,
 		updatePromptInQueue,
 		removePromptInQueue,
+		compactSession,
 		approveToolApproval,
 		rejectToolApproval,
 		answerAskQuestion,

@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SessionNotFoundError } from "@cline/core";
+import { ProviderSettingsManager, SessionNotFoundError } from "@cline/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { materializeUserFiles } from "./attachments";
 import {
@@ -17,6 +17,7 @@ import {
 	createDesktopMistakeLimitPrompt,
 	createDesktopMistakeRecovery,
 	handleChatSessionCommand,
+	hydrateOllamaModelInfo,
 	hasProviderChanged,
 	mergeSessionConfig,
 	prewarmWorkspaceMetadata,
@@ -35,8 +36,12 @@ import {
 } from "./context";
 import type { SidecarContext } from "./types";
 
-const { createContextCompactionPrepareTurnMock } = vi.hoisted(() => ({
+const {
+	createContextCompactionPrepareTurnMock,
+	getLocalProviderModelInfoMock,
+} = vi.hoisted(() => ({
 	createContextCompactionPrepareTurnMock: vi.fn(),
+	getLocalProviderModelInfoMock: vi.fn(),
 }));
 
 vi.mock("@cline/core", async (importOriginal) => {
@@ -47,7 +52,89 @@ vi.mock("@cline/core", async (importOriginal) => {
 	return {
 		...actual,
 		createContextCompactionPrepareTurn: createContextCompactionPrepareTurnMock,
+		getLocalProviderModelInfo: getLocalProviderModelInfoMock,
 	};
+});
+
+describe("hydrateOllamaModelInfo", () => {
+	afterEach(() => {
+		getLocalProviderModelInfoMock.mockReset();
+	});
+
+	it("refreshes model metadata even when cached metadata has the same model id", async () => {
+		getLocalProviderModelInfoMock.mockResolvedValue({
+			id: "qwen3.5:2b",
+			modalities: { input: ["text", "image"], output: ["text"] },
+			capabilities: ["streaming", "images"],
+		});
+		const getProviderConfigSpy = vi
+			.spyOn(ProviderSettingsManager.prototype, "getProviderConfig")
+			.mockReturnValue({
+				providerId: "ollama",
+				modelId: "qwen3.5:2b",
+				mediaBudget: {
+					maxImageEncodedBytes: 12 * 1024 * 1024,
+					maxImageDecodedBytes: 8 * 1024 * 1024,
+					maxTotalMediaBytes: 24 * 1024 * 1024,
+				},
+			} as never);
+		const result = await hydrateOllamaModelInfo({
+			provider: "ollama",
+			model: "qwen3.5:2b",
+			baseUrl: "http://127.0.0.1:11434",
+			providerConfig: {
+				modelInfo: {
+					id: "qwen3.5:2b",
+					modalities: { input: ["text"], output: ["text"] },
+					capabilities: ["streaming"],
+				},
+			},
+		});
+
+		expect(getLocalProviderModelInfoMock).toHaveBeenCalledWith(
+			"ollama",
+			expect.objectContaining({ baseUrl: "http://127.0.0.1:11434" }),
+			"qwen3.5:2b",
+			{ loadLatest: true },
+		);
+		expect(result.providerConfig?.modelInfo).toEqual(
+			expect.objectContaining({
+				modalities: { input: ["text", "image"], output: ["text"] },
+				capabilities: ["streaming", "images"],
+			}),
+		);
+		expect(result.providerConfig).toEqual(
+			expect.objectContaining({
+				mediaBudget: {
+					maxImageEncodedBytes: 12 * 1024 * 1024,
+					maxImageDecodedBytes: 8 * 1024 * 1024,
+					maxTotalMediaBytes: 24 * 1024 * 1024,
+				},
+			}),
+		);
+		expect(getProviderConfigSpy).toHaveBeenCalledWith("ollama", {
+			includeKnownModels: false,
+			modelId: "qwen3.5:2b",
+		});
+		getProviderConfigSpy.mockRestore();
+	});
+
+	it("fails open when live metadata is unavailable instead of reusing stale capability fields", async () => {
+		getLocalProviderModelInfoMock.mockRejectedValue(new Error("offline"));
+		const result = await hydrateOllamaModelInfo({
+			provider: "ollama",
+			model: "qwen3.5:2b",
+			providerConfig: {
+				modelInfo: {
+					id: "qwen3.5:2b",
+					modalities: { input: ["text"], output: ["text"] },
+					capabilities: ["streaming"],
+				},
+			},
+		});
+
+		expect(result.providerConfig?.modelInfo).toEqual({ id: "qwen3.5:2b" });
+	});
 });
 
 describe("resolveDesktopCompactionConfig", () => {

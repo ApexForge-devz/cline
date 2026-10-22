@@ -77,16 +77,16 @@ export const SUPPORTED_IMAGE_MEDIA_TYPES = [
 	"image/webp",
 ] as const;
 
-export const DEFAULT_MAX_IMAGE_BASE64_BYTES = 5 * 1024 * 1024;
+export const DEFAULT_MAX_IMAGE_BASE64_BYTES = 24 * 1024 * 1024;
 export const DEFAULT_MAX_IMAGE_ENCODED_BYTES = DEFAULT_MAX_IMAGE_BASE64_BYTES;
-export const DEFAULT_MAX_IMAGE_DECODED_BYTES = 6 * 1024 * 1024;
-export const DEFAULT_MAX_TOTAL_MEDIA_BYTES = 8 * 1024 * 1024;
+export const DEFAULT_MAX_IMAGE_DECODED_BYTES = 16 * 1024 * 1024;
+export const DEFAULT_MAX_TOTAL_MEDIA_BYTES = 48 * 1024 * 1024;
 
 /** Local Ollama transport defaults. These are provider-policy values, not model capabilities. */
 export const OLLAMA_DEFAULT_MEDIA_BUDGET = {
-	maxImageEncodedBytes: 12 * 1024 * 1024,
-	maxImageDecodedBytes: 8 * 1024 * 1024,
-	maxTotalMediaBytes: 24 * 1024 * 1024,
+	maxImageEncodedBytes: DEFAULT_MAX_IMAGE_ENCODED_BYTES,
+	maxImageDecodedBytes: DEFAULT_MAX_IMAGE_DECODED_BYTES,
+	maxTotalMediaBytes: DEFAULT_MAX_TOTAL_MEDIA_BYTES,
 };
 
 export interface ImageMediaLimits {
@@ -176,16 +176,25 @@ export function imageBase64LengthForDecodedBytes(decodedBytes: number): number {
 	return Math.ceil(decodedBytes / 3) * 4;
 }
 
+function positiveFiniteNumberOrUndefined(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isFinite(value) && value > 0
+		? value
+		: undefined;
+}
+
 export function resolveMediaBudget(
 	options: MediaBudgetOptions = {},
 ): ResolvedMediaBudget {
 	return {
 		maxImageEncodedBytes:
-			options.maxImageEncodedBytes ?? DEFAULT_MAX_IMAGE_ENCODED_BYTES,
+			positiveFiniteNumberOrUndefined(options.maxImageEncodedBytes) ??
+			DEFAULT_MAX_IMAGE_ENCODED_BYTES,
 		maxImageDecodedBytes:
-			options.maxImageDecodedBytes ?? DEFAULT_MAX_IMAGE_DECODED_BYTES,
+			positiveFiniteNumberOrUndefined(options.maxImageDecodedBytes) ??
+			DEFAULT_MAX_IMAGE_DECODED_BYTES,
 		maxTotalMediaBytes:
-			options.maxTotalMediaBytes ?? DEFAULT_MAX_TOTAL_MEDIA_BYTES,
+			positiveFiniteNumberOrUndefined(options.maxTotalMediaBytes) ??
+			DEFAULT_MAX_TOTAL_MEDIA_BYTES,
 	};
 }
 

@@ -1,8 +1,12 @@
 ---
 name: cline-sdk
-description: Comprehensive Cline SDK skill for building AI agents. Covers the Agent runtime, ClineCore sessions, custom tools, plugins, events, LLM providers, scheduling, multi-agent teams, and production deployment. Use for any task involving @cline/sdk or its sub-packages.
+description: Comprehensive Cline SDK skill for building AI agents. Covers the
+  Agent runtime, ClineCore sessions, custom tools, plugins, events, LLM
+  providers, scheduling, multi-agent teams, and production deployment. Use for
+  any task involving @cline/sdk or its sub-packages.
 metadata:
-   references: agent, clinecore
+  references: agent, clinecore
+disabled: true
 ---
 
 # Cline SDK Skill

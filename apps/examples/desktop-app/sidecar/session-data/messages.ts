@@ -55,6 +55,47 @@ function readMessageMetadata(message: JsonRecord): JsonRecord | undefined {
 		: undefined;
 }
 
+function extractStoredAttachmentMeta(
+	message: JsonRecord,
+): Array<{
+	name: string;
+	kind: "image" | "file" | "other";
+	mediaType?: string;
+	sizeBytes?: number;
+}> | undefined {
+	const metadata = readMessageMetadata(message);
+	if (!metadata || !Array.isArray(metadata.attachments)) return undefined;
+	const attachments = metadata.attachments.flatMap((value) => {
+		if (!value || typeof value !== "object") return [];
+		const record = value as JsonRecord;
+		const name = trimNonEmptyString(record.name);
+		if (!name) return [];
+		const kind: "image" | "file" | "other" | undefined =
+			record.kind === "image" ||
+			record.kind === "file" ||
+			record.kind === "other"
+			? record.kind
+			: undefined;
+		if (!kind) return [];
+		const mediaType = trimNonEmptyString(record.mediaType);
+		const sizeBytes =
+			typeof record.sizeBytes === "number" &&
+			Number.isInteger(record.sizeBytes) &&
+			record.sizeBytes >= 0
+				? record.sizeBytes
+				: undefined;
+		return [
+			{
+				name,
+				kind,
+				...(mediaType ? { mediaType } : {}),
+				...(sizeBytes !== undefined ? { sizeBytes } : {}),
+			},
+		];
+	});
+	return attachments.length > 0 ? attachments : undefined;
+}
+
 function extractStoredMessageMeta(message: JsonRecord): JsonRecord | undefined {
 	const metadata = readMessageMetadata(message);
 	if (!metadata) {
@@ -74,12 +115,14 @@ function extractStoredMessageMeta(message: JsonRecord): JsonRecord | undefined {
 		metadata.userRunSpan >= 0
 			? metadata.userRunSpan
 			: undefined;
+	const attachments = extractStoredAttachmentMeta(message);
 	if (
 		!hookEventName &&
 		!messageKind &&
 		!displayRole &&
 		!reason &&
-		userRunSpan === undefined
+		userRunSpan === undefined &&
+		!attachments
 	) {
 		return undefined;
 	}
@@ -89,6 +132,7 @@ function extractStoredMessageMeta(message: JsonRecord): JsonRecord | undefined {
 		displayRole,
 		reason,
 		userRunSpan,
+		...(attachments ? { attachments } : {}),
 	};
 }
 
@@ -140,13 +184,23 @@ function trimNonEmptyString(value: unknown): string | undefined {
 
 function extractImageBlock(
 	record: JsonRecord,
+	preserveOversizedUserAttachment = false,
 ): { mediaType: string; data: string } | undefined {
 	const mediaType = trimNonEmptyString(record.mediaType);
 	const data = trimNonEmptyString(record.data);
 	if (!data) {
 		return undefined;
 	}
-	const validation = validateImageMedia(mediaType, data);
+	const validation = validateImageMedia(
+		mediaType,
+		data,
+		preserveOversizedUserAttachment
+			? {
+					maxEncodedBytes: Number.POSITIVE_INFINITY,
+					maxDecodedBytes: Number.POSITIVE_INFINITY,
+				}
+			: undefined,
+	);
 	return validation.ok
 		? { mediaType: validation.mediaType, data: validation.base64 }
 		: undefined;
@@ -647,7 +701,11 @@ export function readSessionMessagesSync(
 				continue;
 			}
 			if (blockType === "image") {
-				const image = extractImageBlock(record);
+				// Persisted user attachments are conversation UI content, not a
+				// model-request payload. Do not apply the generic 5 MiB formatter
+				// display cap when reconstructing them for chat history. The model
+				// request path applies the provider-specific media budget separately.
+				const image = extractImageBlock(record, role === "user");
 				if (image) {
 					images.push({
 						id: `${messageIdBase}_image_${blockIdx}`,

@@ -147,7 +147,11 @@ describe("formatMessagesForAiSdk", () => {
 				role: "user",
 				content: [
 					{ type: "text", text: "" },
-					{ type: "file", data: image, mediaType: "image/png" },
+					{
+						type: "file",
+						data: { type: "data", data: image },
+						mediaType: "image/png",
+					},
 				],
 			},
 		]);
@@ -864,7 +868,11 @@ describe("formatMessagesForAiSdk", () => {
 				role: "user",
 				content: [
 					{ type: "text", text: "Tell me about the image" },
-					{ type: "file", data: image, mediaType: "image/jpeg" },
+					{
+						type: "file",
+						data: { type: "data", data: image },
+						mediaType: "image/jpeg",
+					},
 				],
 			},
 		]);
@@ -892,7 +900,11 @@ describe("formatMessagesForAiSdk", () => {
 				role: "user",
 				content: [
 					{ type: "text", text: "Describe it" },
-					{ type: "file", data: image, mediaType: "image/png" },
+					{
+						type: "file",
+						data: { type: "data", data: image },
+						mediaType: "image/png",
+					},
 				],
 			},
 		]);
@@ -981,7 +993,13 @@ describe("formatMessagesForAiSdk", () => {
 			},
 			{
 				role: "user",
-				content: [{ type: "file", data: image, mediaType: "image/png" }],
+				content: [
+					{
+						type: "file",
+						data: { type: "data", data: image },
+						mediaType: "image/png",
+					},
+				],
 			},
 		]);
 	});
@@ -998,7 +1016,13 @@ describe("formatMessagesForAiSdk", () => {
 		expect(messages).toEqual([
 			{
 				role: "user",
-				content: [{ type: "file", data: image, mediaType: "image/png" }],
+				content: [
+					{
+						type: "file",
+						data: { type: "data", data: image },
+						mediaType: "image/png",
+					},
+				],
 			},
 		]);
 	});
@@ -1015,7 +1039,13 @@ describe("formatMessagesForAiSdk", () => {
 		expect(messages).toEqual([
 			{
 				role: "user",
-				content: [{ type: "file", data: image, mediaType: "image/png" }],
+				content: [
+					{
+						type: "file",
+						data: { type: "data", data: image },
+						mediaType: "image/png",
+					},
+				],
 			},
 		]);
 	});
@@ -1036,6 +1066,38 @@ describe("formatMessagesForAiSdk", () => {
 			"[media omitted: invalid or exceeds size limit]",
 		);
 		expect(serialized).not.toContain("application/octet-stream");
+	});
+
+	it("uses the configured media budget for binary user images", () => {
+		const image = new Uint8Array(7 * 1024 * 1024);
+		const messages = formatMessagesForAiSdk(
+			undefined,
+			[
+				{
+					role: "user",
+					content: [
+						{ type: "image", image, mediaType: "image/png" },
+					],
+				},
+			],
+			{
+				mediaBudget: {
+					maxImageEncodedBytes: 12 * 1024 * 1024,
+					maxImageDecodedBytes: 8 * 1024 * 1024,
+					maxTotalMediaBytes: 24 * 1024 * 1024,
+				},
+			},
+		);
+
+		const file = messages[0]?.content[0];
+		expect(file).toMatchObject({
+			type: "file",
+			mediaType: "image/png",
+		});
+		expect(file).not.toMatchObject({
+			type: "text",
+			text: "[media omitted: invalid or exceeds size limit]",
+		});
 	});
 
 	it("replaces over-budget binary image parts", () => {
@@ -1062,6 +1124,51 @@ describe("formatMessagesForAiSdk", () => {
 		]);
 	});
 
+	it("emits canonical AI SDK 7 file-data variants", () => {
+		const image = imageData(8);
+		const messages = formatMessagesForAiSdk(undefined, [
+			{
+				role: "user",
+				content: [
+					{ type: "image", image, mediaType: "image/jpeg" },
+					{
+						type: "image",
+						image: new URL("https://example.com/a.jpg"),
+						mediaType: "image/jpeg",
+					},
+					{
+						type: "image",
+						image: "https://example.com/b.jpg",
+						mediaType: "image/jpeg",
+					},
+				],
+			},
+		]);
+
+		expect(messages).toEqual([
+			{
+				role: "user",
+				content: [
+					{
+						type: "file",
+						data: { type: "data", data: image },
+						mediaType: "image/jpeg",
+					},
+					{
+						type: "file",
+						data: { type: "url", url: new URL("https://example.com/a.jpg") },
+						mediaType: "image/jpeg",
+					},
+					{
+						type: "file",
+						data: { type: "url", url: new URL("https://example.com/b.jpg") },
+						mediaType: "image/jpeg",
+					},
+				],
+			},
+		]);
+	});
+
 	it("validates and budgets data URL objects before provider formatting", () => {
 		const image = imageData(8);
 		const messages = formatMessagesForAiSdk(undefined, [
@@ -1082,7 +1189,7 @@ describe("formatMessagesForAiSdk", () => {
 				content: [
 					{
 						type: "file",
-						data: `data:image/jpeg;base64,${image}`,
+						data: { type: "data", data: image },
 						mediaType: "image/jpeg",
 					},
 				],
@@ -1105,7 +1212,7 @@ describe("formatMessagesForAiSdk", () => {
 				content: [
 					{
 						type: "file",
-						data: `data:image/jpeg;base64,${image}`,
+						data: { type: "data", data: image },
 						mediaType: "image/jpeg",
 					},
 				],
@@ -1623,7 +1730,13 @@ describe("formatMessagesForAiSdk - models without image support", () => {
 		expect(messages).toEqual([
 			{
 				role: "user",
-				content: [{ type: "file", data: image, mediaType: "image/png" }],
+				content: [
+					{
+						type: "file",
+						data: { type: "data", data: image },
+						mediaType: "image/png",
+					},
+				],
 			},
 		]);
 	});

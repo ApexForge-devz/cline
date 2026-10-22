@@ -1082,6 +1082,18 @@ export async function listLocalProviders(
 	return { providers, settingsPath: manager.getFilePath(), voiceInput };
 }
 
+export async function getLocalProviderModelInfo(
+	providerId: string,
+	config: ProviderConfig,
+	modelId: string,
+	options: { loadLatest?: boolean } = {},
+): Promise<ModelInfo | undefined> {
+	const id = modelId.trim();
+	if (!id) return undefined;
+	const modelMap = await resolveProviderModelMap(providerId.trim(), config, options);
+	return modelMap[id];
+}
+
 export async function getLocalProviderModels(
 	providerId: string,
 	config?: ProviderConfig,
@@ -1373,7 +1385,6 @@ async function saveLocalProviderSettingsUnlocked(
 		"client",
 		"routingProviderId",
 		"capabilities",
-		"mediaBudget",
 	] as const) {
 		if (Object.hasOwn(request, key)) next[key] = request[key];
 	}
@@ -1391,6 +1402,7 @@ async function saveLocalProviderSettingsUnlocked(
 		"auth",
 		"headers",
 		"reasoning",
+		"mediaBudget",
 		"ollamaGeneration",
 		"aws",
 		"gcp",

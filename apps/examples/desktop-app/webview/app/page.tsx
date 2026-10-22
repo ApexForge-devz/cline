@@ -1185,6 +1185,7 @@ function ChatThreadPane({
 		steerPromptInQueue,
 		updatePromptInQueue,
 		removePromptInQueue,
+		compactSession,
 		approveToolApproval,
 		rejectToolApproval,
 		answerAskQuestion,
@@ -1546,13 +1547,25 @@ function ChatThreadPane({
 		if (config.provider.trim() !== "ollama") return null;
 		const provider = providerCredentials[config.provider.trim()];
 		if (!provider) return null;
+		const parseFiniteNumber = (value: string | number | boolean | null | undefined): number | undefined => {
+			if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+			if (typeof value !== "string") return undefined;
+			const parsed = Number(value.trim());
+			return Number.isFinite(parsed) ? parsed : undefined;
+		};
+		const configuredMediaBudget = Object.fromEntries(
+			([
+				["maxImageEncodedBytes", provider.configValues?.["mediaBudget.maxImageEncodedBytes"]],
+				["maxImageDecodedBytes", provider.configValues?.["mediaBudget.maxImageDecodedBytes"]],
+				["maxTotalMediaBytes", provider.configValues?.["mediaBudget.maxTotalMediaBytes"]],
+			] as const).flatMap(([key, value]) => {
+				const parsed = parseFiniteNumber(value);
+				return parsed !== undefined && parsed > 0 ? [[key, parsed]] : [];
+			}),
+		);
 		return resolveOllamaRuntimeSettings({
 			configValues: provider.configValues,
-			mediaBudget: {
-				maxImageEncodedBytes: Number(provider.configValues?.["mediaBudget.maxImageEncodedBytes"] ?? NaN),
-				maxImageDecodedBytes: Number(provider.configValues?.["mediaBudget.maxImageDecodedBytes"] ?? NaN),
-				maxTotalMediaBytes: Number(provider.configValues?.["mediaBudget.maxTotalMediaBytes"] ?? NaN),
-			},
+			mediaBudget: configuredMediaBudget,
 			headers: provider.headers,
 			modelOverrides: provider.modelOverrides,
 			modelContextWindow: providerModelContextWindows[config.provider.trim()]?.[config.model.trim()],
@@ -2098,6 +2111,21 @@ function ChatThreadPane({
 		const result = await forkSession();
 		openForkedSession(result);
 	}, [forkSession, openForkedSession]);
+	const handleForkFromBookmark = useCallback(
+		async (runCount: number) => {
+			try {
+				const result = await forkSession({ beforeRunCount: runCount });
+				openForkedSession(result);
+			} catch (error) {
+				toast({
+					variant: "destructive",
+					title: "Could not fork session",
+					description: error instanceof Error ? error.message : String(error),
+				});
+			}
+		},
+		[forkSession, openForkedSession],
+	);
 	const handleFixCredentials = useCallback(
 		(target: "account" | "models") => {
 			if (target === "account") {
@@ -2433,6 +2461,20 @@ function ChatThreadPane({
 	);
 	const displayedStatus = hideDeletedSessionUi ? "idle" : status;
 	const displayedSessionId = hideDeletedSessionUi ? null : sessionId;
+	const [compactingSession, setCompactingSession] = useState(false);
+	const handleCompactSession = useCallback(async () => {
+		if (compactingSession || !displayedSessionId || BUSY_STATUSES.has(displayedStatus)) return;
+		setCompactingSession(true);
+		try {
+			const result = await compactSession();
+			toast({ title: "Context compacted", description: result });
+		} catch (error) {
+			toast({ variant: "destructive", title: "Compaction failed", description: error instanceof Error ? error.message : String(error) });
+		} finally {
+			setCompactingSession(false);
+		}
+	}, [compactSession, compactingSession, displayedSessionId, displayedStatus]);
+
 	const displayedIsSwitching = hideDeletedSessionUi
 		? false
 		: isHydratingSession;
@@ -2587,10 +2629,24 @@ function ChatThreadPane({
 	const composer = (
 		<ChatInputBar
 			readOnly={isCloudSessionExpired}
+			enableTools={config.enableTools}
 			attachments={attachmentList}
 			environmentId={environmentId}
 			hasRunningAgents={agentActivity.running > 0}
 			onAbort={handleAbort}
+			onCompact={handleCompactSession}
+			compactingSession={compactingSession}
+			onForkSession={handleForkSession}
+			onNewSession={onNewThread}
+			onBookmarkFork={handleForkFromBookmark}
+			sessionId={displayedSessionId}
+			runtimeConfig={config}
+			activityLabel={activityLabel}
+			messages={displayedMessages}
+			pendingAskQuestions={pendingAskQuestions.length}
+			pendingToolApprovals={pendingToolApprovals.length}
+			fileDiffs={fileDiffs}
+			error={displayedError}
 			onAttachFiles={handleAttachFiles}
 			onListGitBranches={listGitBranches}
 			onRemoveAttachment={handleRemoveAttachment}

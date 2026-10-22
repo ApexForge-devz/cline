@@ -707,6 +707,7 @@ export {
 	type DeleteLocalProviderRequest,
 	deleteLocalProvider,
 	ensureCustomProvidersLoaded,
+	getLocalProviderModelInfo,
 	getLocalProviderModels,
 	getLocalTranscriptionModels,
 	isDedicatedTranscriptionModel,
