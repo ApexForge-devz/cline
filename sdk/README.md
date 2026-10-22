@@ -12,13 +12,13 @@
 <a href="https://www.reddit.com/r/cline/" target="_blank"><strong>r/cline</strong></a>
 </td>
 <td align="center">
-<a href="https://github.com/cline/cline/discussions/categories/feature-requests?discussions_q=is%3Aopen+category%3A%22Feature+Requests%22+sort%3Atop" target="_blank"><strong>Feature Requests</strong></a>
+<a href="https://github.com/ApexForge-devz/cline/issues" target="_blank"><strong>Feature Requests</strong></a>
 </td>
 </tbody>
 </table>
 </div>
 
-The Cline SDK is a TypeScript framework for building AI agents that can edit files, run shell commands, browse the web, call APIs, and use any custom tool you give them. It's the same engine that powers [Cline](https://github.com/cline/cline), packaged as a library you can embed in your own applications.
+The Cline SDK is a TypeScript framework for building AI agents that can edit files, run shell commands, browse the web, call APIs, and use any custom tool you give them. It's the same engine that powers [Cline](https://github.com/ApexForge-devz/cline), packaged as a library you can embed in your own applications.
 
 ```typescript
 import { Agent } from "@cline/sdk"
@@ -44,7 +44,7 @@ npm install @cline/sdk
 
 ## SDK Skill
 
-If you use a coding agent (Claude Code, Codex, Cline, etc.), install the [Cline SDK skill](https://github.com/cline/sdk-skill) to give your agent context on the SDK's APIs and best practices to help you build with the Cline SDK.
+If you use a coding agent (Claude Code, Codex, Cline, etc.), install the [Cline SDK skill](../.agents/skills/cline-sdk/SKILL.md) to give your agent context on the SDK's APIs and best practices to help you build with the Cline SDK.
 
 ```bash
 npx skills add cline/sdk-skill
