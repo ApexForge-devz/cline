@@ -243,6 +243,14 @@ fn set_update_status(
     refresh_tray_status(app, update_state);
 }
 
+fn disabled_update_status() -> UpdateStatus {
+    UpdateStatus {
+        state: "disabled".to_string(),
+        version: None,
+        error: None,
+    }
+}
+
 // An empty endpoint list disables both background and on-demand updates.
 // Nightly builds use this configuration because they are Actions artifacts only.
 fn updates_enabled(app: &tauri::AppHandle) -> bool {
@@ -885,8 +893,15 @@ async fn pick_workspace_directory(
 }
 
 #[tauri::command]
-fn get_update_status(update_state: State<'_, Arc<UpdateState>>) -> UpdateStatus {
-    update_state.snapshot()
+fn get_update_status(
+    app: tauri::AppHandle,
+    update_state: State<'_, Arc<UpdateState>>,
+) -> UpdateStatus {
+    if updates_enabled(&app) {
+        update_state.snapshot()
+    } else {
+        disabled_update_status()
+    }
 }
 
 #[tauri::command]
@@ -954,6 +969,9 @@ async fn check_for_update_now(
     app: tauri::AppHandle,
     update_state: State<'_, Arc<UpdateState>>,
 ) -> Result<UpdateStatus, String> {
+    if !updates_enabled(&app) {
+        return Ok(disabled_update_status());
+    }
     check_and_install_update(&app, update_state.inner()).await;
     Ok(update_state.snapshot())
 }
