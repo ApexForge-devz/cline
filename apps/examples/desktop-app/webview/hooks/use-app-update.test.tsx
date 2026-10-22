@@ -44,6 +44,15 @@ describe("checkForUpdateAndNotify", () => {
 		expect(result.action).toBeTruthy();
 	});
 
+	it("explains when automatic updates are disabled", async () => {
+		const result = await runCheck({ state: "disabled" });
+
+		expect(result).toMatchObject({
+			title: "Automatic updates are disabled",
+			description: "Build and install a new version from this fork to apply changes.",
+		});
+	});
+
 	it("confirms when no update is available", async () => {
 		const result = await runCheck({ state: "idle" });
 
