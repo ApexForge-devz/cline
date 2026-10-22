@@ -1,13 +1,12 @@
-// Generates the Tauri updater manifest (latest.json) from the updater
-// artifacts produced by the desktop-publish workflow. The manifest is uploaded
-// to the rolling `desktop-latest` GitHub release, which is the static endpoint
-// configured in src-tauri/tauri.conf.json; its platform URLs point back at the
-// immutable per-version release assets.
+// Generates an optional Tauri updater manifest for releases hosted by this
+// repository. The fork's desktop configs intentionally have empty updater
+// endpoint lists, so installed builds do not poll upstream or fork release feeds.
+// Manifest generation alone does not enable client auto-updates.
 //
 // Usage:
 //   bun scripts/generate-update-manifest.ts \
 //     --version 0.1.0 --tag desktop-v0.1.0 --dir dist/desktop \
-//     --out dist/desktop/latest.json [--repo cline/cline] [--notes-file notes.md]
+//     --out dist/desktop/latest.json [--repo ApexForge-devz/cline] [--notes-file notes.md]
 
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -145,7 +144,7 @@ const main = () => {
 	const repo =
 		getArgValue(args, "--repo") ??
 		process.env.GITHUB_REPOSITORY ??
-		"cline/cline";
+		"ApexForge-devz/cline";
 	const notesFile = getArgValue(args, "--notes-file");
 
 	if (!version || !tag || !dir || !out) {
@@ -156,7 +155,7 @@ const main = () => {
 
 	const notes = notesFile
 		? readFileSync(notesFile, "utf8").trim()
-		: `Cline v${version}`;
+		: `Cline - ApexForge v${version}`;
 
 	const manifest = buildUpdateManifest({
 		version,
