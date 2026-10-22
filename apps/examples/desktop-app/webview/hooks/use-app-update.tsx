@@ -6,7 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import { desktopClient, isTauriAvailable } from "@/lib/desktop-client";
 
 export type AppUpdateStatus = {
-	state: "idle" | "checking" | "downloading" | "ready" | "error";
+	state: "idle" | "checking" | "downloading" | "ready" | "error" | "disabled";
 	version?: string | null;
 	error?: string | null;
 };
@@ -162,6 +162,12 @@ export async function checkForUpdateAndNotify(): Promise<void> {
 				variant: "destructive",
 				title: "Update check failed",
 				description: status.error ?? "Unknown error",
+			});
+			return;
+		case "disabled":
+			toast({
+				title: "Automatic updates are disabled",
+				description: "Build and install a new version from this fork to apply changes.",
 			});
 			return;
 		default:
