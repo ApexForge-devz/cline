@@ -284,6 +284,10 @@ const main = async () => {
 	}
 
 	if (!skipBuild) {
+		// Packaging is a release-style build: require compressed remote helpers
+		// unless the developer has explicitly accepted the larger local output.
+		process.env.CLINE_REQUIRE_UPX = "1";
+
 		// Linux ships deb and rpm only. The AppImage target is skipped because
 		// linuxdeploy cannot process the Bun-compiled sidecar (ldd fails on it
 		// and patchelf corrupts it), which aborts the whole bundle step.
@@ -302,9 +306,15 @@ const main = async () => {
 	}
 
 	console.log(`Packaged ${platform} desktop artifacts:`);
+	let totalBytes = 0;
 	for (const artifact of artifacts) {
-		console.log(`- ${path.relative(APP_ROOT, artifact)}`);
+		const sizeBytes = statSync(artifact).size;
+		totalBytes += sizeBytes;
+		console.log(
+			`- ${path.relative(APP_ROOT, artifact)} (${(sizeBytes / 1024 / 1024).toFixed(1)} MiB)`,
+		);
 	}
+	console.log(`Total artifact size: ${(totalBytes / 1024 / 1024).toFixed(1)} MiB`);
 };
 
 main().catch((error: unknown) => {

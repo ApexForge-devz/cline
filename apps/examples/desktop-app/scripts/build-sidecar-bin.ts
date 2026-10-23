@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { readdir, readFile, stat } from "node:fs/promises";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { $ } from "bun";
 import { prepareWindowsCrossCompileRuntime } from "./bun-cross-compile-runtime";
@@ -41,6 +44,133 @@ const resolveBunCompileTarget = (targetTriple: string): string | undefined => {
 const sidecarOutfile = (targetTriple: string): string => {
 	const extension = targetTriple.includes("windows") ? ".exe" : "";
 	return `./src-tauri/bin/code-sidecar-${targetTriple}${extension}`;
+};
+
+const APP_ROOT = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+const WORKSPACE_ROOT = path.resolve(APP_ROOT, "../../..");
+const REMOTE_HELPER_FINGERPRINT_PATH = path.join(
+	APP_ROOT,
+	"src-tauri",
+	"bin",
+	".remote-helpers-fingerprint",
+);
+const REMOTE_HELPER_OUTPUTS = [
+	path.join(
+		APP_ROOT,
+		"src-tauri",
+		"bin",
+		"remote-helpers",
+		"cline-remote-helper-x86_64-unknown-linux-gnu",
+	),
+	path.join(
+		APP_ROOT,
+		"src-tauri",
+		"bin",
+		"remote-helpers",
+		"cline-remote-helper-aarch64-unknown-linux-gnu",
+	),
+];
+
+const hashDirectory = async (
+	hash: ReturnType<typeof createHash>,
+	directory: string,
+): Promise<void> => {
+	const entries = await readdir(directory, { withFileTypes: true });
+	entries.sort((left, right) => left.name.localeCompare(right.name));
+	for (const entry of entries) {
+		const entryPath = path.join(directory, entry.name);
+		if (entry.isDirectory()) {
+			await hashDirectory(hash, entryPath);
+			continue;
+		}
+		if (!entry.isFile()) continue;
+		hash.update(path.relative(WORKSPACE_ROOT, entryPath).replaceAll("\\", "/"));
+		hash.update(await readFile(entryPath));
+	}
+};
+
+const computeRemoteHelperFingerprint = async (): Promise<string> => {
+	const hash = createHash("sha256");
+	hash.update(JSON.stringify(["bun-version", Bun.version]));
+	hash.update("\n");
+	const upxVersion = Bun.which("upx")
+		? (await $`upx --version`.text()).trim()
+		: "missing";
+	hash.update(JSON.stringify(["upx-version", upxVersion]));
+	hash.update("\n");
+	hash.update(
+		JSON.stringify([
+			"compression-policy",
+			Boolean(process.env.CI) || process.env.CLINE_REQUIRE_UPX === "1",
+			process.env.CLINE_ALLOW_UNCOMPRESSED_REMOTE_HELPERS === "1" && !process.env.CI,
+		]),
+	);
+	hash.update("\n");
+	const keyFiles = [
+		path.join(WORKSPACE_ROOT, "bun.lock"),
+		fileURLToPath(import.meta.url),
+		path.join(APP_ROOT, "scripts", "telemetry-define-args.ts"),
+	];
+	for (const filePath of keyFiles) {
+		hash.update(path.relative(WORKSPACE_ROOT, filePath).replaceAll("\\", "/"));
+		hash.update(await readFile(filePath));
+	}
+
+	// Values passed through Bun --define affect the helper executable even when
+	// source and SDK outputs are unchanged. Hash them without logging secrets.
+	for (const name of [
+		"TELEMETRY_SERVICE_API_KEY",
+		"ERROR_SERVICE_API_KEY",
+		"CLINE_CODE_CLOUD_AGENTS",
+		"OTEL_TELEMETRY_ENABLED",
+		"OTEL_METRICS_EXPORTER",
+		"OTEL_LOGS_EXPORTER",
+		"OTEL_TRACES_EXPORTER",
+		"OTEL_EXPORTER_OTLP_PROTOCOL",
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_HEADERS",
+		"OTEL_METRIC_EXPORT_INTERVAL",
+	]) {
+		hash.update(JSON.stringify([name, process.env[name] ?? ""]));
+		hash.update("\n");
+	}
+
+	const packagesDirectory = path.join(WORKSPACE_ROOT, "sdk", "packages");
+	const packages = await readdir(packagesDirectory, { withFileTypes: true });
+	packages.sort((left, right) => left.name.localeCompare(right.name));
+	for (const packageEntry of packages) {
+		if (!packageEntry.isDirectory()) continue;
+		const distDirectory = path.join(
+			packagesDirectory,
+			packageEntry.name,
+			"dist",
+		);
+		try {
+			if ((await stat(distDirectory)).isDirectory()) {
+				await hashDirectory(hash, distDirectory);
+			}
+		} catch {
+			// Some workspace packages do not emit a dist directory.
+		}
+	}
+	return hash.digest("hex");
+};
+
+const remoteHelpersAreCurrent = async (fingerprint: string): Promise<boolean> => {
+	try {
+		const savedFingerprint = (await readFile(
+			REMOTE_HELPER_FINGERPRINT_PATH,
+			"utf8",
+		)).trim();
+		if (savedFingerprint !== fingerprint) return false;
+		for (const output of REMOTE_HELPER_OUTPUTS) {
+			const outputStat = await stat(output);
+			if (!outputStat.isFile() || outputStat.size < 1_000_000) return false;
+		}
+		return true;
+	} catch {
+		return false;
+	}
 };
 
 const buildSidecar = async (
@@ -92,13 +222,21 @@ const buildSidecar = async (
 // workflow installs it on every runner.
 const compressRemoteHelper = async (outfile: string): Promise<void> => {
 	if (!Bun.which("upx")) {
-		if (process.env.CI) {
+		const requiresCompression =
+			Boolean(process.env.CI) || process.env.CLINE_REQUIRE_UPX === "1";
+		const explicitlyAllowUncompressed =
+			process.env.CLINE_ALLOW_UNCOMPRESSED_REMOTE_HELPERS === "1" &&
+			!process.env.CI;
+		if (requiresCompression && !explicitlyAllowUncompressed) {
 			throw new Error(
-				`upx is required to compress ${outfile} but was not found on PATH`,
+				[
+					`upx is required to create a size-optimized package, but was not found on PATH (${outfile}).`,
+					"Install UPX before packaging, or explicitly allow a larger local package with CLINE_ALLOW_UNCOMPRESSED_REMOTE_HELPERS=1.",
+				].join("\n"),
 			);
 		}
 		console.warn(
-			`upx not found on PATH; leaving ${outfile} uncompressed (only the packaged size is affected)`,
+			`upx not found on PATH; leaving ${outfile} uncompressed. This increases the package size substantially; set CLINE_ALLOW_UNCOMPRESSED_REMOTE_HELPERS=1 only when that tradeoff is intentional.`,
 		);
 		return;
 	}
@@ -113,7 +251,7 @@ const compressRemoteHelper = async (outfile: string): Promise<void> => {
 // in the bundle fails notarization. Mac remotes are served from a macOS
 // desktop by its own signed sidecar instead (sidecar/remote-helper.ts).
 //
-// On a Windows host, Bun 1.3.13 can fail while extracting the downloaded
+// On a Windows host, Bun 1.4.2 can fail while extracting the downloaded
 // Linux runtime needed by these cross-compiles. The build-sidecar path prepares
 // the validated official runtime in Bun's normal cache before invoking Bun.
 const buildRemoteHelpers = async (): Promise<void> => {
@@ -155,7 +293,16 @@ const main = async () => {
 	} else {
 		await buildSidecar(targetTriple);
 	}
-	await buildRemoteHelpers();
+	const remoteHelperFingerprint = await computeRemoteHelperFingerprint();
+	if (await remoteHelpersAreCurrent(remoteHelperFingerprint)) {
+		console.log("Remote helper binaries are current; skipping their rebuild.");
+	} else {
+		await buildRemoteHelpers();
+		await Bun.write(
+			REMOTE_HELPER_FINGERPRINT_PATH,
+			`${remoteHelperFingerprint}\n`,
+		);
+	}
 };
 
 main().catch((error: unknown) => {
