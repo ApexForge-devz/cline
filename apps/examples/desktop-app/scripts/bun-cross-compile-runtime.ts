@@ -11,13 +11,13 @@ import {
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 
-const PINNED_BUN_VERSION = "1.4.2";
+const SUPPORTED_BUN_VERSIONS = ["1.3.13", "1.4.2"] as const;
 
 type RuntimeSpec = {
 	archiveName: string;
 	cacheName: string;
 	expectedMachine: number;
-	sha256: string;
+	sha256ByVersion: Record<(typeof SUPPORTED_BUN_VERSIONS)[number], string>;
 };
 
 const WINDOWS_LINUX_RUNTIME_SPECS: Record<string, RuntimeSpec> = {
@@ -25,23 +25,36 @@ const WINDOWS_LINUX_RUNTIME_SPECS: Record<string, RuntimeSpec> = {
 		archiveName: "bun-linux-x64",
 		cacheName: "bun-linux-x64",
 		expectedMachine: 62,
-		sha256: "36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913",
+		sha256ByVersion: {
+			"1.3.13": "79c0771fa8b92c33aae41e15a0e0d307ea99d0e2f00317c71c6c53237a78e25a",
+			"1.4.2": "36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913",
+		},
 	},
 	"bun-linux-x64-baseline": {
 		archiveName: "bun-linux-x64-baseline",
 		cacheName: "bun-linux-x64-baseline",
 		expectedMachine: 62,
-		sha256: "c678040f14fe0440eb839d37cbd0ce4c051a32da72806ac97de6a6aab6bf728f",
+		sha256ByVersion: {
+			"1.3.13": "9d8a24292a7068090205daac0a5a223f5f69736f5287e37bf88d3b4031edc750",
+			"1.4.2": "c678040f14fe0440eb839d37cbd0ce4c051a32da72806ac97de6a6aab6bf728f",
+		},
 	},
 	"bun-linux-arm64": {
 		archiveName: "bun-linux-aarch64",
 		cacheName: "bun-linux-aarch64",
 		expectedMachine: 183,
-		sha256: "54328bbc2d9c8e0c9f892c544d66c57a83b84139e34909e5ee81758f1ac8fda7",
+		sha256ByVersion: {
+			"1.3.13": "70bae41b3908b0a120e1e58c5c8af30e74afae3b8d11b0d3fdd8e787ddfb4b22",
+			"1.4.2": "54328bbc2d9c8e0c9f892c544d66c57a83b84139e34909e5ee81758f1ac8fda7",
+		},
 	},
 };
 
-export type WindowsCrossCompileRuntime = RuntimeSpec & {
+export type WindowsCrossCompileRuntime = {
+	archiveName: string;
+	cacheName: string;
+	expectedMachine: number;
+	sha256: string;
 	cacheFilename: string;
 	downloadUrl: string;
 };
@@ -52,13 +65,17 @@ export const resolveWindowsCrossCompileRuntime = (
 ): WindowsCrossCompileRuntime | undefined => {
 	const spec = WINDOWS_LINUX_RUNTIME_SPECS[bunTarget];
 	if (!spec) return undefined;
-	if (bunVersion !== PINNED_BUN_VERSION) {
+	const sha256 = spec.sha256ByVersion[bunVersion as keyof typeof spec.sha256ByVersion];
+	if (!sha256) {
 		throw new Error(
-			`Windows Linux cross-compilation requires Bun ${PINNED_BUN_VERSION}; received ${bunVersion}`,
+			`Windows Linux cross-compilation supports Bun ${SUPPORTED_BUN_VERSIONS.join(", ")}; received ${bunVersion}` ,
 		);
 	}
 	return {
-		...spec,
+		archiveName: spec.archiveName,
+		cacheName: spec.cacheName,
+		expectedMachine: spec.expectedMachine,
+		sha256,
 		cacheFilename: `${spec.cacheName}-v${bunVersion}`,
 		downloadUrl: `https://github.com/oven-sh/bun/releases/download/bun-v${bunVersion}/${spec.archiveName}.zip`,
 	};
@@ -104,8 +121,8 @@ const powershellLiteral = (value: string): string =>
 	`'${value.replaceAll("'", "''")}'`;
 
 /**
- * The pinned Bun version can fail to extract Linux cross-compile runtimes on Windows.
- * Download and validate the official pinned runtime into Bun's normal cache so
+ * Supported Bun versions can fail to extract Linux cross-compile runtimes on Windows.
+ * Download and validate the matching official runtime into Bun's normal cache so
  * `bun build --compile` can reuse it without entering the broken extractor path.
  */
 export const prepareWindowsCrossCompileRuntime = async (
