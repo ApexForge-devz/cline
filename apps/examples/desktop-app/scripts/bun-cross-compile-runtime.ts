@@ -65,10 +65,11 @@ export const resolveWindowsCrossCompileRuntime = (
 ): WindowsCrossCompileRuntime | undefined => {
 	const spec = WINDOWS_LINUX_RUNTIME_SPECS[bunTarget];
 	if (!spec) return undefined;
-	const sha256 = spec.sha256ByVersion[bunVersion as keyof typeof spec.sha256ByVersion];
+	const sha256 =
+		spec.sha256ByVersion[bunVersion as (typeof SUPPORTED_BUN_VERSIONS)[number]];
 	if (!sha256) {
 		throw new Error(
-			`Windows Linux cross-compilation supports Bun ${SUPPORTED_BUN_VERSIONS.join(", ")}; received ${bunVersion}` ,
+			`Windows Linux cross-compilation supports Bun ${SUPPORTED_BUN_VERSIONS.join(", ")}; received ${bunVersion}`,
 		);
 	}
 	return {
@@ -121,7 +122,7 @@ const powershellLiteral = (value: string): string =>
 	`'${value.replaceAll("'", "''")}'`;
 
 /**
- * Supported Bun versions can fail to extract Linux cross-compile runtimes on Windows.
+ * Bun can fail to extract Linux cross-compile runtimes on Windows.
  * Download and validate the matching official runtime into Bun's normal cache so
  * `bun build --compile` can reuse it without entering the broken extractor path.
  */
