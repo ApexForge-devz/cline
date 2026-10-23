@@ -2771,7 +2771,7 @@ Add Opus 4.1 through Claude Code
 
 ## [2.0.6]
 
-- Update URLs to https://github.com/cline/cline
+- Update repository URLs
 
 ## [2.0.5]
 
