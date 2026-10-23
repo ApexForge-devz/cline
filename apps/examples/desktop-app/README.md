@@ -17,6 +17,7 @@ From `apps/examples/desktop-app/`:
 - `bun run build:binary` - build desktop binary
 - `bun run package:desktop` - package the current OS desktop app into `dist/desktop/`
 - `bun run typecheck` - TypeScript check
+- `bun run test:cross-compile-runtime` - test the Windows Linux-runtime workaround and pinned archive checksums
 
 ### Checking webview changes
 
@@ -159,13 +160,18 @@ supported. A macOS desktop reaches macOS SSH hosts with its own signed
 universal sidecar, which runs the same helper entrypoint; Windows and Linux
 desktops need a locally built darwin helper passed through
 `CLINE_REMOTE_HELPER_BINARY`. The helper includes its own runtime and is UPX-compressed at
-build time (about 27 MB instead of 115 MB per helper; install `upx` locally to
-match the packaged size). It is copied once per matching desktop build and cached, with no
-`apt`, `npm`, root access,
-global CLI install, or public Hub port. Disconnecting stops the desktop-owned
-remote Hub but leaves the helper cached for a faster reconnect. The helper
-imports the remote login-shell `PATH`, so user-installed Git, GitHub CLI, and
-MCP executables remain visible.
+build time (about 27 MB instead of 115 MB per helper). Install `upx` locally
+to build release-style packages: `bun run package:desktop` fails when UPX is
+missing rather than silently creating a much larger installer. For a local-only
+package where size is intentionally accepted, set
+`CLINE_ALLOW_UNCOMPRESSED_REMOTE_HELPERS=1`; CI builds never permit this
+override. The build caches the compiled helpers by fingerprinting the Bun lock,
+build script, telemetry configuration, and SDK output, and only rebuilds them
+when those inputs change. No `apt`, `npm`, root access, global CLI install,
+or public Hub port is needed. Disconnecting stops the desktop-owned remote Hub
+but leaves the helper cached for a faster reconnect. The helper imports the
+remote login-shell `PATH`, so user-installed Git, GitHub CLI, and MCP
+executables remain visible.
 
 Each service instance uses its own discovery record, so an existing Cline CLI/Hub on the
 same account is neither replaced nor stopped. Both Hub processes can coexist
@@ -276,7 +282,7 @@ export APPLE_API_ISSUER="<issuer UUID>"
 bun run package:desktop:mac
 ```
 
-The first signing run pops a keychain dialog — enter your macOS login password and click **Always Allow**. Notarization uploads the app to Apple's automated malware scan (typically 2–10 minutes) and staples the ticket. Artifacts land in `dist/desktop/`; share the `.dmg`. The DMG name takes its version from `src-tauri/tauri.conf.json`, the zip name from `package.json` — bump both.
+The first signing run pops a keychain dialog — enter your macOS login password and click **Always Allow**. Notarization uploads the app to Apple's automated malware scan (typically 2–10 minutes) and staples the ticket. Artifacts land in `dist/desktop/`; share the `.dmg`. The bundle version is validated against `package.json` before packaging; keep `package.json` and `src-tauri/tauri.conf.json` in sync.
 
 Do not remove `src-tauri/entitlements.plist` or the `bundle.macOS.entitlements` reference in `tauri.conf.json`: notarization requires the hardened runtime, which breaks the Bun-compiled sidecar (`SharedArrayBuffer is not defined`, surfacing in-app as "desktop backend endpoint not ready") unless the JIT entitlements are present.
 
@@ -317,7 +323,7 @@ Desktop transport envelope:
 
 ## Data + Storage
 
-- Session artifacts are written under `~/.cline/data/sessions/<sessionId>/` (or `CLINE_SESSION_DATA_DIR`).
+- Session artifacts are written under `~/.cline/data/sessions/<sessionId>/` (or `CLINE_SESSION_DATA_DIR`). The fork uses a distinct native application identifier and installer name, but these CLI-compatible data paths remain shared with other Cline builds unless overridden; changing the Tauri identifier alone does not isolate session/settings data.
 - Canonical replay/export artifact: `<sessionId>.messages.json`.
 - `<sessionId>.messages.json` is expected to contain ordered messages plus assistant `modelInfo` and `metrics` (including cache token fields when provided by the model runtime).
 - `<sessionId>.hooks.jsonl` is observability/debug telemetry and should not be required for normal history replay/export flows.
@@ -330,6 +336,14 @@ pipeline used by the CLI and writes structured runtime logs to
 `~/.cline/data/logs/code.log` by default. Telemetry continues to honor the global
 opt-out setting exposed in the desktop settings UI. The sidecar truncates stale
 logs and rotates the active file before it exceeds 50 MiB.
+
+Build-time service API keys and `OTEL_EXPORTER_OTLP_HEADERS` are rejected by
+default because compile-time defines are embedded in the distributed binary and
+can be extracted. For private, access-controlled dogfood builds only, the
+explicit opt-in `CLINE_ALLOW_EMBEDDED_TELEMETRY_SECRETS=1` permits embedding
+them and emits a warning. CI builds reject telemetry credentials even when the
+opt-in is present. Do not use this option for public or otherwise untrusted
+distributions; prefer a trusted runtime service for credentials.
 
 Logging can be configured with the same environment variables as the CLI:
 
