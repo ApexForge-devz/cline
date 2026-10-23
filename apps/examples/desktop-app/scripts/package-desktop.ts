@@ -15,7 +15,7 @@ const BOOLEAN_FLAGS = new Set(["--allow-unsigned-mac", "--skip-build"]);
 const VALUE_FLAGS = new Set(["--platform", "--target"]);
 const VALID_FLAGS = [...BOOLEAN_FLAGS, ...VALUE_FLAGS];
 
-const APP_NAME = "Cline";
+const APP_NAME = "Cline ApexForge";
 const APP_ROOT = path.resolve(import.meta.dir, "..");
 const BUNDLE_ROOT = path.join(
 	APP_ROOT,
@@ -115,6 +115,38 @@ const packageVersion = async (): Promise<string> => {
 		path.join(APP_ROOT, "package.json"),
 	).json();
 	return String(packageJson.version ?? "0.0.0");
+};
+
+const assertPackageMetadataConsistency = async (): Promise<void> => {
+	const packageJson = await Bun.file(
+		path.join(APP_ROOT, "package.json"),
+	).json();
+	const tauriConfig = await Bun.file(
+		path.join(APP_ROOT, "src-tauri", "tauri.conf.json"),
+	).json();
+	const packageVersion = String(packageJson.version ?? "0.0.0");
+	const tauriVersion = String(tauriConfig.version ?? "");
+	const tauriProductName = String(tauriConfig.productName ?? "");
+	const mismatches: string[] = [];
+	if (packageVersion !== tauriVersion) {
+		mismatches.push(
+			`package.json version is ${packageVersion}, but tauri.conf.json version is ${tauriVersion || "(missing)"}`,
+		);
+	}
+	if (APP_NAME !== tauriProductName) {
+		mismatches.push(
+			`package-desktop.ts app name is ${APP_NAME}, but tauri.conf.json productName is ${tauriProductName || "(missing)"}`,
+		);
+	}
+	if (mismatches.length > 0) {
+		throw new Error(
+			[
+				"Desktop packaging metadata is inconsistent:",
+				...mismatches.map((mismatch) => `- ${mismatch}`),
+				"Align these values so bundle names and version metadata stay consistent.",
+			].join("\n"),
+		);
+	}
 };
 
 const macDistributionCredentialsConfigured = (): boolean => {
@@ -279,6 +311,7 @@ const main = async () => {
 	const skipBuild = hasArg("--skip-build");
 
 	assertCanBuildPlatform(platform);
+	await assertPackageMetadataConsistency();
 	if (platform === "mac") {
 		assertMacDistributionReady(allowUnsignedMac);
 	}

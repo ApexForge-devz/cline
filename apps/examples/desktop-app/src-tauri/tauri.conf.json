@@ -1,8 +1,8 @@
 {
 	"$schema": "https://schema.tauri.app/config/2",
-	"productName": "Cline",
+	"productName": "Cline ApexForge",
 	"version": "0.0.42",
-	"identifier": "bot.cline.app",
+	"identifier": "dev.apexforge.cline",
 	"build": {
 		"beforeDevCommand": "bun run build:sidecar:bin && bun run dev:web",
 		"devUrl": "http://localhost:3125",
