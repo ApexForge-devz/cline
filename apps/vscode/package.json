@@ -399,8 +399,7 @@
 		"docs:check-links": "cd docs && bun run check",
 		"docs:rename-file": "cd docs && bun run rename",
 		"report-issue": "node scripts/report-issue.js",
-		"storybook": "cd webview-ui && bun run storybook",
-		"eval:smoke:run": "bun evals/smoke-tests/run-smoke-tests.ts"
+		"storybook": "cd webview-ui && bun run storybook"
 	},
 	"lint-staged": {
 		"src/shared/storage/state-keys.ts": [
