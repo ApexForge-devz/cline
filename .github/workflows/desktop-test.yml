@@ -5,33 +5,32 @@ on:
     branches:
       - main
       - desktop-experimental
+      - my-local-changes
     paths:
-      - "apps/examples/desktop-app/package.json"
-      - "apps/examples/desktop-app/scripts/dmg-background.ts"
-      - "apps/examples/desktop-app/scripts/dmg-background.test.ts"
-      - "apps/examples/desktop-app/scripts/windows-installer.test.ts"
-      - "apps/examples/desktop-app/src-tauri/nsis/**"
-      # windows-installer.test.ts pins the @tauri-apps/cli version bun.lock resolves.
+      - "apps/examples/desktop-app/**"
+      - "sdk/**"
       - "bun.lock"
-      - "apps/examples/desktop-app/src-tauri/dmg/background.png"
-      - "apps/examples/desktop-app/src-tauri/dmg/background@2x.png"
+      - "package.json"
+      - ".tool-versions"
       - ".github/workflows/desktop-test.yml"
   pull_request:
     branches:
       - main
       - desktop-experimental
     paths:
-      - "apps/examples/desktop-app/package.json"
-      - "apps/examples/desktop-app/scripts/dmg-background.ts"
-      - "apps/examples/desktop-app/scripts/dmg-background.test.ts"
-      - "apps/examples/desktop-app/scripts/windows-installer.test.ts"
-      - "apps/examples/desktop-app/src-tauri/nsis/**"
-      # windows-installer.test.ts pins the @tauri-apps/cli version bun.lock resolves.
+      - "apps/examples/desktop-app/**"
+      - "sdk/**"
       - "bun.lock"
-      - "apps/examples/desktop-app/src-tauri/dmg/background.png"
-      - "apps/examples/desktop-app/src-tauri/dmg/background@2x.png"
+      - "package.json"
+      - ".tool-versions"
       - ".github/workflows/desktop-test.yml"
   workflow_dispatch:
+
+# Multiple commits on the development branch should validate the newest tree,
+# not queue expensive duplicate Windows packaging builds for every file update.
+concurrency:
+  group: desktop-test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -95,3 +94,72 @@ jobs:
 
       - name: Test install and uninstall process cleanup
         run: bun run test:windows-installer
+
+  windows-package:
+    name: Build and validate Windows desktop installers
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+          no-cache: true
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup UPX
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'upx.zip'
+          Invoke-WebRequest 'https://github.com/upx/upx/releases/download/v5.2.1/upx-5.2.1-win64.zip' -OutFile $zip
+          if ((Get-FileHash $zip -Algorithm SHA256).Hash -ne 'EABC6792A347D45E945BE7748423E7868FD01B0D2BCAA2F4B1031FD71FF69BDA') {
+            throw 'UPX distribution checksum mismatch'
+          }
+          Expand-Archive $zip -DestinationPath $env:RUNNER_TEMP
+          $upxDir = Join-Path $env:RUNNER_TEMP 'upx-5.2.1-win64'
+          $upxDir >> $env:GITHUB_PATH
+          & (Join-Path $upxDir 'upx.exe') --version
+
+      - name: Setup NSIS
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'nsis.zip'
+          Invoke-WebRequest 'https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip' -OutFile $zip
+          if ((Get-FileHash $zip -Algorithm SHA1).Hash -ne 'EF7FF767E5CBD9EDD22ADD3A32C9B8F4500BB10D') {
+            throw 'NSIS distribution checksum mismatch'
+          }
+          Expand-Archive $zip -DestinationPath $env:RUNNER_TEMP
+          $nsisDir = Join-Path $env:RUNNER_TEMP 'nsis-3.11'
+          $nsisDir >> $env:GITHUB_PATH
+          "MAKENSIS_PATH=$(Join-Path $nsisDir 'makensis.exe')" >> $env:GITHUB_ENV
+
+      - name: Build SDK exports
+        run: bun run build:sdk
+
+      - name: Test Windows cross-compile runtime resolver
+        run: bun -F @cline/code test:cross-compile-runtime
+
+      - name: Typecheck desktop app
+        run: bun -F @cline/code typecheck
+
+      - name: Build Windows installers
+        run: bun -F @cline/code package:desktop:windows
+
+      - name: Upload Windows installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: cline-windows-installers
+          path: apps/examples/desktop-app/dist/desktop/*
+          if-no-files-found: error
+          retention-days: 14
+
