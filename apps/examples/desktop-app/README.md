@@ -244,6 +244,36 @@ served by the rolling `desktop-beta` release — the same never-delete rule
 applies to it. The experimental-branch process and beta release flow live in
 [`EXPERIMENTAL.md`](./EXPERIMENTAL.md).
 
+## Fork identity and shared data
+
+The fork uses the `Cline ApexForge` product name and `dev.apexforge.cline`
+Tauri identifier so its native application and installer identity differs from
+the upstream Cline desktop app. The development build uses the separate
+`Cline Dev` / `dev.apexforge.cline.dev` identity.
+
+This changes the native app identity, not every application data path. Session
+artifacts and shared Cline settings still use `~/.cline/data` by default, so
+running this fork alongside another Cline client may share session/settings
+data. `CLINE_SESSION_DATA_DIR` overrides the session-artifact directory only;
+it does not by itself isolate every settings or credential store.
+
+## Remote helper compression
+
+Remote Linux helper binaries embed a Bun runtime. The package script therefore
+requires UPX on `PATH` to produce a size-optimized distribution. Install UPX
+before packaging to avoid shipping two much larger uncompressed helper binaries.
+
+For a local-only build where a larger installer is acceptable, explicitly opt
+out in PowerShell:
+
+```powershell
+$env:CLINE_ALLOW_UNCOMPRESSED_REMOTE_HELPERS = "1"
+bun run package:desktop:windows
+```
+
+CI builds do not permit that opt-out, so CI packages always require UPX. The
+packaging script prints each artifact size and the total after collection.
+
 ## Shareable Desktop Packages (manual fallback)
 
 Tauri desktop bundles are OS-specific, so build each package on the target OS:
