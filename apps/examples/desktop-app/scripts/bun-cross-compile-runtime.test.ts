@@ -44,21 +44,40 @@ describe("resolveWindowsCrossCompileRuntime", () => {
 		});
 	});
 
+
+	test("supports the Bun 1.3.13 runtime used by local Windows builds", () => {
+		expect(resolveWindowsCrossCompileRuntime("bun-linux-x64", "1.3.13")).toMatchObject({
+			cacheFilename: "bun-linux-x64-v1.3.13",
+			sha256: "79c0771fa8b92c33aae41e15a0e0d307ea99d0e2f00317c71c6c53237a78e25a",
+		});
+		expect(
+			resolveWindowsCrossCompileRuntime("bun-linux-x64-baseline", "1.3.13"),
+		).toMatchObject({
+			cacheFilename: "bun-linux-x64-baseline-v1.3.13",
+			sha256: "9d8a24292a7068090205daac0a5a223f5f69736f5287e37bf88d3b4031edc750",
+		});
+		expect(resolveWindowsCrossCompileRuntime("bun-linux-arm64", "1.3.13")).toMatchObject({
+			cacheFilename: "bun-linux-aarch64-v1.3.13",
+			sha256: "70bae41b3908b0a120e1e58c5c8af30e74afae3b8d11b0d3fdd8e787ddfb4b22",
+		});
+	});
+
 	test("does not intercept native or unrelated targets", () => {
 		expect(
 			resolveWindowsCrossCompileRuntime("bun-windows-x64", "1.4.2"),
 		).toBeUndefined();
 		expect(
-			resolveWindowsCrossCompileRuntime("bun-darwin-arm64", "1.4.2"),
+			resolveWindowsCrossCompileRuntime("bun-darwin-arm64", "1.3.13"),
 		).toBeUndefined();
 	});
 
-	test("fails closed when Bun version differs from pinned runtime", () => {
-		expect(() =>
-			resolveWindowsCrossCompileRuntime("bun-linux-x64", "1.4.3"),
-		).toThrow("requires Bun 1.4.2");
-	});
-});
+		test("fails closed for unsupported Bun versions", () => {
+		for (const version of ["1.3.14", "1.4.3"]) {
+			expect(() =>
+				resolveWindowsCrossCompileRuntime("bun-linux-x64", version),
+			).toThrow("supports Bun 1.3.13, 1.4.2");
+		}
+	});});
 
 describe("isExpectedElfExecutable", () => {
 	const elfHeader = (machine: number): Uint8Array => {
