@@ -22,9 +22,6 @@ const nextConfig = {
 		// between `next dev webview` and `next build` run inside webview/.
 		CLINE_DESKTOP_CHANGELOG_PATH: path.join(__dirname, "../CHANGELOG.md"),
 	},
-	typescript: {
-		ignoreBuildErrors: true,
-	},
 	images: {
 		unoptimized: true,
 	},
