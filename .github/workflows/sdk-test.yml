@@ -98,6 +98,10 @@ jobs:
               if: ${{ !cancelled() && steps.build_sdk_step.outcome == 'success' && steps.build_cli_step.outcome == 'success' && matrix.os == 'windows-latest' }}
               run: bun -F './sdk/packages/**' test
 
+            - name: Test Windows cross-compile runtime resolver
+              if: ${{ !cancelled() && steps.build_sdk_step.outcome == 'success' }}
+              run: bun -F @cline/code test:cross-compile-runtime
+
             - name: Run Desktop Sidecar Tests
               if: ${{ !cancelled() && steps.build_sdk_step.outcome == 'success' && matrix.os == 'ubuntu-latest' }}
               run: |
