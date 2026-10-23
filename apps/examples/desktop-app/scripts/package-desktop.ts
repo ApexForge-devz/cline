@@ -265,8 +265,15 @@ const collectMacArtifacts = async (
 
 	const artifacts = [zipPath];
 	if (!suffix) {
+		const appNameParts = sanitizeName(APP_NAME)
+			.toLowerCase()
+			.split("-")
+			.filter(Boolean);
 		for (const dmgPath of walkFiles(path.join(BUNDLE_ROOT, "dmg")).filter(
-			(file) => file.endsWith(".dmg"),
+			(file) =>
+				file.endsWith(".dmg") &&
+				path.basename(file).includes(version) &&
+				appNameParts.every((part) => path.basename(file).toLowerCase().includes(part)),
 		)) {
 			artifacts.push(copyArtifact(dmgPath, path.basename(dmgPath)));
 		}
@@ -275,15 +282,49 @@ const collectMacArtifacts = async (
 	return artifacts;
 };
 
-const collectWindowsArtifacts = (): string[] =>
-	walkFiles(BUNDLE_ROOT)
-		.filter((file) => file.endsWith(".msi") || file.endsWith(".exe"))
+const collectWindowsArtifacts = (version: string): string[] => {
+	const expectedPrefix = `${APP_NAME.replace(/[^a-zA-Z0-9._-]+/g, "_")}_${version}_`;
+	return walkFiles(BUNDLE_ROOT)
+		.filter((file) => {
+			const filename = path.basename(file);
+			return (
+				(filename.endsWith(".msi") || filename.endsWith(".exe")) &&
+				filename.startsWith(expectedPrefix)
+			);
+		})
 		.map((file) => copyArtifact(file, path.basename(file)));
+};
 
-const collectLinuxArtifacts = (): string[] =>
-	walkFiles(BUNDLE_ROOT)
-		.filter((file) => file.endsWith(".deb") || file.endsWith(".rpm"))
+const collectLinuxArtifacts = (version: string): string[] => {
+	const packageName = APP_NAME.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
+	return walkFiles(BUNDLE_ROOT)
+		.filter((file) => {
+			const filename = path.basename(file);
+			return (
+				(filename.startsWith(`${packageName}_${version}_`) &&
+					filename.endsWith(".deb")) ||
+				(filename.startsWith(`${packageName}-${version}-`) &&
+					filename.endsWith(".rpm"))
+			);
+		})
 		.map((file) => copyArtifact(file, path.basename(file)));
+};
+
+const cleanBundleOutputs = (platform: DesktopPlatform): void => {
+	const directories: Record<DesktopPlatform, string[]> = {
+		mac: ["macos", "dmg"],
+		windows: ["msi", "nsis"],
+		linux: ["deb", "rpm"],
+	};
+	for (const directory of directories[platform]) {
+		rmSync(path.join(BUNDLE_ROOT, directory), {
+			force: true,
+			recursive: true,
+		});
+	}
+};
 
 const collectArtifacts = async (
 	platform: DesktopPlatform,
@@ -297,9 +338,9 @@ const collectArtifacts = async (
 		return collectMacArtifacts(version, allowUnsignedMac);
 	}
 	if (platform === "windows") {
-		return collectWindowsArtifacts();
+		return collectWindowsArtifacts(version);
 	}
-	return collectLinuxArtifacts();
+	return collectLinuxArtifacts(version);
 };
 
 const main = async () => {
@@ -317,6 +358,10 @@ const main = async () => {
 	}
 
 	if (!skipBuild) {
+		// Remove artifacts from previous builds, which can otherwise mix the old
+		// upstream product name with this fork's installers in dist/desktop.
+		cleanBundleOutputs(platform);
+
 		// Packaging is a release-style build: require compressed remote helpers
 		// unless the developer has explicitly accepted the larger local output.
 		process.env.CLINE_REQUIRE_UPX = "1";
