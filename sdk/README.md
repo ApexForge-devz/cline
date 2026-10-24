@@ -295,18 +295,18 @@ Works with every major LLM provider out of the box:
 
 ## Documentation
 
-Full documentation at [docs.cline.bot/sdk](https://docs.cline.bot/sdk/overview):
+Documentation maintained with this fork: [SDK overview](https://github.com/ApexForge-devz/cline/blob/my-local-changes/docs/sdk/overview.mdx). Related pages:
 
-- [Quickstart](https://docs.cline.bot/sdk/quickstart) -- zero to running agent in 5 minutes
-- [Core Concepts](https://docs.cline.bot/sdk/agents) -- agents, sessions, tools, events, extensions, hooks
-- [Guides](https://docs.cline.bot/sdk/guides/building-an-agent) -- end-to-end tutorials for common patterns
-- [Architecture](https://docs.cline.bot/sdk/architecture/overview) -- how the SDK is structured and why
-- [API Reference](https://docs.cline.bot/sdk/reference/cline-core) -- every method, type, and config option
+- [Quickstart](https://github.com/ApexForge-devz/cline/tree/my-local-changes/apps/examples/quickstart) -- zero to running agent in 5 minutes
+- [Core Concepts](https://github.com/ApexForge-devz/cline/tree/my-local-changes/docs/sdk) -- agents, sessions, tools, events, extensions, hooks
+- [Guides](https://github.com/ApexForge-devz/cline/tree/my-local-changes/docs/sdk/guides) -- end-to-end tutorials for common patterns
+- [Architecture](https://github.com/ApexForge-devz/cline/blob/my-local-changes/docs/sdk/architecture/overview.mdx) -- how the SDK is structured and why
+- [API Reference](https://github.com/ApexForge-devz/cline/tree/my-local-changes/sdk/packages) -- every method, type, and config option
 
 
 ## Contributing
 
-To contribute to the project, start with our [Contributing Guide](CONTRIBUTING.md) to learn the basics. You can also join our [Discord](https://discord.gg/cline) to chat with other contributors in the `#contributors` channel. If you're looking for full-time work, check out our open positions on our [careers page](https://cline.bot/join-us)!
+To contribute to this fork, start with the [Contributing Guide](../CONTRIBUTING.md) or report an issue in the [ApexForge repository](https://github.com/ApexForge-devz/cline/issues).
 
 ## License
 
