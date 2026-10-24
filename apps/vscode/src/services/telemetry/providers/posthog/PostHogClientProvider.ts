@@ -1,5 +1,6 @@
 import { type EventMessage, PostHog } from "posthog-node"
 import { ClineEndpoint } from "@/config"
+import { isClineCloudServicesEnabled } from "@cline/shared"
 import { fetch } from "@/shared/net"
 import { hasExplicitPostHogHost, posthogConfig } from "@/shared/services/config/posthog-config"
 import { Logger } from "@/shared/services/Logger"
@@ -21,8 +22,10 @@ export class PostHogClientProvider {
 	private readonly client: PostHog | null
 
 	private constructor() {
-		// Skip PostHog client initialization in self-hosted mode
-		if (ClineEndpoint.isSelfHosted()) {
+		// Cline-hosted telemetry is disabled by default, independent of any
+		// on-premises endpoint configuration. Explicitly configured PostHog
+		// destinations remain available when the cloud-services opt-in is set.
+		if (!isClineCloudServicesEnabled() || ClineEndpoint.isSelfHosted()) {
 			this.client = null
 			return
 		}
