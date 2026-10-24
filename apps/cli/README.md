@@ -8,10 +8,10 @@
 <table>
 <tbody>
 <td align="center">
-<a href="https://www.npmjs.com/package/cline" target="_blank">NPM</a>
+<a href="https://github.com/ApexForge-devz/cline/tree/my-local-changes/apps/cli" target="_blank">CLI source</a>
 </td>
 <td align="center">
-<a href="https://marketplace.visualstudio.com/items?itemName=saoudrizwan.claude-dev" target="_blank">VS Code Extension</a>
+<a href="https://github.com/ApexForge-devz/cline/tree/my-local-changes/apps/vscode" target="_blank">VS Code source</a>
 </td>
 <td align="center">
 <a href="https://discord.gg/cline" target="_blank">Discord</a>
@@ -29,21 +29,21 @@
 </table>
 </div>
 
-Run Cline in your terminal. Interactive chat for paired sessions, or fully headless for CI/CD and scripting. The CLI shares its agent core with the [Cline VS Code extension](https://marketplace.visualstudio.com/items?itemName=saoudrizwan.claude-dev), JetBrains plugin, and SDK, so plan/act modes, MCP servers, checkpoints, rules, skills, and provider configuration all behave the same across surfaces.
+Run Cline in your terminal. Interactive chat for paired sessions, or fully headless for CI/CD and scripting. The CLI shares its agent core with the [ApexForge VS Code extension source](https://github.com/ApexForge-devz/cline/tree/my-local-changes/apps/vscode), JetBrains plugin, and SDK, so plan/act modes, MCP servers, checkpoints, rules, skills, and provider configuration all behave the same across surfaces.
 
-## Install
+## Run from source
 
-```sh
-npm install -g cline
-```
+This fork is not published under the upstream `cline` npm package or the upstream VS Code Marketplace identity. Do not use `npm install -g cline` to install this fork; that installs the official upstream CLI.
 
-For nightly builds:
+From the repository root, install dependencies, build the SDK, and launch the CLI in development mode:
 
 ```sh
-npm install -g cline@nightly
+bun install
+bun run build:sdk
+bun run cli
 ```
 
-Platform binaries are published for macOS, Linux, and Windows on `arm64` and `x64`. The `cline` package resolves the correct binary for your platform via optional dependencies, so no Node, Bun, or Zig runtime is required at install time.
+Self-updates are disabled by default so this fork does not check the public `cline` package. To opt into updates from a package published specifically for this fork, set `CLINE_UPDATE_PACKAGE_NAME` to that package name. Do not set it to `cline` unless you intentionally want the upstream package.
 
 ## Quick start
 
