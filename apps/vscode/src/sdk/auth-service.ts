@@ -854,7 +854,9 @@ export class AuthService {
 	 */
 	async handleDeauth(reason: LogoutReason = LogoutReason.UNKNOWN): Promise<void> {
 		try {
-			telemetryService.captureAuthLoggedOut("cline", reason)
+			if (isClineCloudServicesEnabled()) {
+				telemetryService.captureAuthLoggedOut("cline", reason)
+			}
 			this._clineAuthInfo = null
 			this._authenticated = false
 			clearClineCredentials()
@@ -978,6 +980,14 @@ export class AuthService {
 	 */
 	async restoreRefreshTokenAndRetrieveAuthInfo(): Promise<void> {
 		try {
+			if (!isClineCloudServicesEnabled()) {
+				// Do not inspect, refresh, or report stored Cline account credentials
+				// while account/cloud features are explicitly disabled.
+				this._authenticated = false
+				this._clineAuthInfo = null
+				await this.sendAuthStatusUpdate()
+				return
+			}
 			const creds = readClineCredentials()
 			if (!creds) {
 				this._authenticated = false
@@ -1134,12 +1144,14 @@ export class AuthService {
 
 		// Poll feature flags immediately for the current auth context so cache-only
 		// consumers (for example BannerService) see the latest remote config.
-		const authInfo = this._clineAuthInfo
-		if (authInfo?.userInfo) {
-			await telemetryService.identifyAccount(authInfo.userInfo)
+		if (isClineCloudServicesEnabled()) {
+			const authInfo = this._clineAuthInfo
+			if (authInfo?.userInfo) {
+				await telemetryService.identifyAccount(authInfo.userInfo)
+			}
+			const userId = authInfo?.userInfo?.id || null
+			await featureFlagsService.poll(userId)
 		}
-		const userId = authInfo?.userInfo?.id || null
-		await featureFlagsService.poll(userId)
 		for (const controller of uniqueControllers) {
 			controller.invalidateProviderListings()
 		}

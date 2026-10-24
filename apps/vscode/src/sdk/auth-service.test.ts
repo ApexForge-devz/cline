@@ -510,6 +510,12 @@ describe("AuthService", () => {
 	})
 
 	describe("handleDeauth() — logout", () => {
+		it("does not send Cline account logout telemetry when cloud services are disabled", async () => {
+			process.env.CLINE_ENABLE_CLOUD_SERVICES = "0"
+			await authService.handleDeauth(LogoutReason.USER_INITIATED)
+			expect(mockCaptureAuthLoggedOut).not.toHaveBeenCalled()
+		});
+
 		it("clears auth state and pushes unauthenticated state", async () => {
 			const authInfo = createTestAuthInfo()
 			testAccess(authService)._clineAuthInfo = authInfo
@@ -680,6 +686,22 @@ describe("AuthService", () => {
 	})
 
 	describe("restoreRefreshTokenAndRetrieveAuthInfo()", () => {
+		it("does not inspect or refresh saved Cline credentials when cloud services are disabled", async () => {
+			process.env.CLINE_ENABLE_CLOUD_SERVICES = "0"
+			mockProviderSettings.set("cline", {
+				provider: "cline",
+				auth: { accessToken: "workos:saved", refreshToken: "saved-refresh", accountId: "saved-user" },
+			})
+
+			await authService.restoreRefreshTokenAndRetrieveAuthInfo()
+
+			expect(vi.mocked(getValidClineCredentials)).not.toHaveBeenCalled()
+			expect(testAccess(authService)._authenticated).toBe(false)
+			expect(testAccess(authService)._clineAuthInfo).toBeNull()
+			expect(mockProviderSettings.get("cline")?.auth).toBeDefined()
+			expect(mockCaptureAuthLoggedOut).not.toHaveBeenCalled()
+		});
+
 		it("strips the workos: prefix from the persisted access token", async () => {
 			mockProviderSettings.set("cline", {
 				provider: "cline",
