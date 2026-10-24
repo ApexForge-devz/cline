@@ -16,7 +16,7 @@ import {
 	saveLocalProviderOAuthCredentials,
 	type UserCurrentPlan,
 } from "@cline/core";
-import { getClineEnvironmentConfig } from "@cline/shared";
+import { getClineEnvironmentConfig, isClineCloudServicesEnabled } from "@cline/shared";
 import { formatCreditBalance, normalizeCreditBalance } from "../utils/output";
 import { identifyTelemetryAccount } from "../utils/telemetry";
 import type { Config } from "../utils/types";
@@ -137,6 +137,9 @@ export async function createClineAccountService(input: {
 	clineProviderSettings?: ProviderSettings;
 	providerSettingsManager?: ProviderSettingsManager;
 }): Promise<ClineAccountService | undefined> {
+	if (!isClineCloudServicesEnabled()) {
+		throw new Error("Cline cloud services are disabled. Set CLINE_ENABLE_CLOUD_SERVICES=1 to enable account features.");
+	}
 	const manager =
 		input.providerSettingsManager ?? new ProviderSettingsManager();
 	const settings =

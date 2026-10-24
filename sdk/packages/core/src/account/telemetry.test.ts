@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	persistClineAccountTelemetryIdentity,
 	resolveClineAccountTelemetryIdentity,
@@ -19,6 +19,9 @@ function createUser(
 		...overrides,
 	};
 }
+
+beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+afterEach(() => vi.unstubAllEnvs());
 
 describe("Cline account telemetry identity", () => {
 	it("resolves the active organization", () => {
@@ -83,6 +86,25 @@ describe("Cline account telemetry identity", () => {
 			},
 			{ setLastUsed: false },
 		);
+	});
+
+	it("does not persist Cline account identity when cloud services are disabled", () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		const getProviderSettings = vi.fn(() => ({
+			provider: "cline" as const,
+			auth: { accountId: "old-user", accessToken: "secret" },
+		}));
+		const saveProviderSettings = vi.fn();
+		const manager = { getProviderSettings, saveProviderSettings };
+
+		expect(
+			persistClineAccountTelemetryIdentity(manager, {
+				id: "new-user",
+				provider: "cline",
+			}),
+		).toBe(false);
+		expect(getProviderSettings).not.toHaveBeenCalled();
+		expect(saveProviderSettings).not.toHaveBeenCalled();
 	});
 
 	it("replaces stale persisted account identity after an account switch", () => {

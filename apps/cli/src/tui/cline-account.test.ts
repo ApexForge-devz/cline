@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Config } from "../utils/types";
 
+beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+afterEach(() => vi.unstubAllEnvs());
+
 const coreMocks = vi.hoisted(() => {
 	const serviceOptions: Array<{
 		apiBaseUrl: string;
@@ -119,6 +122,17 @@ describe("createClineAccountService", () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
 		vi.unstubAllGlobals();
+	});
+
+	it("does not resolve persisted Cline credentials when cloud services are disabled", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		const { createClineAccountService } = await import("./cline-account");
+
+		await expect(createClineAccountService({ config: makeConfig() })).rejects.toThrow(
+			/Cline cloud services are disabled/,
+		);
+		expect(coreMocks.getProviderSettings).not.toHaveBeenCalled();
+		expect(coreMocks.serviceOptions).toHaveLength(0);
 	});
 
 	it("refreshes persisted Cline OAuth credentials before creating the account service", async () => {

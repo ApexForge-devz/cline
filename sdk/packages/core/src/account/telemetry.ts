@@ -1,3 +1,4 @@
+import { isClineCloudServicesEnabled } from "@cline/shared";
 import type { ProviderSettingsManager } from "../services/storage/provider-settings-manager";
 import type { ClineAccountUser } from "./types";
 
@@ -43,6 +44,9 @@ export function persistClineAccountTelemetryIdentity(
 	>,
 	identity: ClineAccountTelemetryIdentity,
 ): boolean {
+	// Do not retain Cline account/organization identity for detached telemetry
+	// consumers when Cline-hosted account services are disabled.
+	if (!isClineCloudServicesEnabled()) return false;
 	try {
 		const persisted = manager.getProviderSettings("cline");
 		if (!persisted) return false;

@@ -38,6 +38,9 @@ import {
 } from "./telemetry";
 import { resetCliExtensionActivationForTests } from "./telemetry.test-helpers";
 
+beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+afterEach(() => vi.unstubAllEnvs());
+
 describe("captureCliExtensionActivated", () => {
 	beforeEach(() => {
 		hoisted.captureExtensionActivated.mockClear();
@@ -87,6 +90,18 @@ describe("captureCliExtensionActivated", () => {
 		expect(hoisted.captureExtensionActivated).toHaveBeenCalledTimes(1);
 	});
 
+	test("omits Cline account identity when cloud services are disabled but still captures activation", () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		captureCliExtensionActivated(undefined, {
+			id: "stored-user",
+			provider: "cline",
+			organizationId: "stored-org",
+		});
+
+		expect(hoisted.identifyAccount).not.toHaveBeenCalled();
+		expect(hoisted.captureExtensionActivated).toHaveBeenCalledTimes(1);
+	});
+
 	test("does not call identifyAccount when no account context is provided", () => {
 		captureCliExtensionActivated();
 		expect(hoisted.identifyAccount).not.toHaveBeenCalled();
@@ -97,6 +112,18 @@ describe("identifyTelemetryAccount", () => {
 	beforeEach(() => {
 		hoisted.identifyAccount.mockClear();
 		hoisted.getCliTelemetryService.mockClear();
+	});
+
+	test("does not identify a stored Cline account when cloud services are disabled", () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		identifyTelemetryAccount({
+			id: "stored-user",
+			provider: "cline",
+			organizationId: "stored-org",
+		});
+
+		expect(hoisted.identifyAccount).not.toHaveBeenCalled();
+		expect(hoisted.getCliTelemetryService).not.toHaveBeenCalled();
 	});
 
 	test("forwards account context to core identifyAccount on the CLI telemetry service", () => {

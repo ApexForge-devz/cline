@@ -8,6 +8,7 @@ import {
 	registerDisposable,
 	TelemetryLoggerSink,
 } from "@cline/core";
+import { isClineCloudServicesEnabled } from "@cline/shared";
 import { getCliBuildInfo } from "./common";
 import { identifyFeatureFlagsAccount } from "./feature-flags";
 import {
@@ -107,7 +108,12 @@ export function identifyTelemetryAccount(
 	account: CliTelemetryAccountContext,
 	logger?: BasicLogger,
 ): void {
-	identifyAccount(getCliTelemetryService(logger), account);
+	if (account.provider !== "cline" || isClineCloudServicesEnabled()) {
+		identifyAccount(getCliTelemetryService(logger), account);
+	}
+	// The feature-flag adapter has its own cloud-policy guard. Keep calling it
+	// so non-Cline providers and future explicitly enabled integrations retain
+	// their established behavior.
 	void identifyFeatureFlagsAccount(account, logger);
 }
 
@@ -135,7 +141,9 @@ export function captureCliExtensionActivated(
 	markActivationCaptured();
 	const telemetry = getCliTelemetryService(logger);
 	if (account) {
-		identifyAccount(telemetry, account);
+		if (account.provider !== "cline" || isClineCloudServicesEnabled()) {
+			identifyAccount(telemetry, account);
+		}
 		void identifyFeatureFlagsAccount(account, logger);
 	}
 	captureExtensionActivated(telemetry);
