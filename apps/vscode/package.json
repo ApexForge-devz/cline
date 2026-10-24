@@ -376,7 +376,7 @@
 		"pretest": "bun run compile && bun run compile-tests && bun run compile-standalone && bun run lint",
 		"test": "bun run test:unit && bun run test:integration",
 		"test:integration": "bun run compile-tests && vscode-test",
-		"test:unit": "bun scripts/run-bun-unit-tests.ts && bun run test:telemetry-build-env",
+		"test:unit": "bun scripts/run-bun-unit-tests.ts && bun run test:script-safety",
 		"test:vitest": "vitest run --config vitest.config.ts",
 		"test:vitest:watch": "vitest --config vitest.config.ts",
 		"test:bun": "bun scripts/run-bun-tests.ts",
@@ -400,7 +400,7 @@
 		"docs:rename-file": "cd docs && bun run rename",
 		"report-issue": "node scripts/report-issue.js",
 		"storybook": "cd webview-ui && bun run storybook",
-		"test:telemetry-build-env": "node --test scripts/telemetry-build-env.test.mjs"
+		"test:script-safety": "node --test scripts/telemetry-build-env.test.mjs scripts/nightly-package-identity.test.mjs"
 	},
 	"lint-staged": {
 		"src/shared/storage/state-keys.ts": [

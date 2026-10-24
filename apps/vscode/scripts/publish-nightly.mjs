@@ -53,6 +53,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { restore as restoreMarketplaceReadme, swapIn as swapInMarketplaceReadme } from "./marketplace-readme.mjs"
+import { NIGHTLY_PACKAGE_IDENTITY } from "./nightly-package-identity.mjs"
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url)
@@ -76,9 +77,7 @@ const log = {
 // Configuration
 const config = {
 	// The name and display name for the nightly version
-	nightlyName: "cline-nightly",
-	originalName: "claude-dev",
-	nightlyDisplayName: "Cline (Nightly)",
+	...NIGHTLY_PACKAGE_IDENTITY,
 	projectRoot: path.join(__dirname, ".."),
 	get packageJsonPath() {
 		return path.join(this.projectRoot, "package.json")
