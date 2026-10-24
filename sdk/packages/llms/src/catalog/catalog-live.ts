@@ -1,3 +1,4 @@
+import { isClineCloudServicesEnabled } from "@cline/shared";
 import {
 	builtinProviderSupportsModelOperation,
 	normalizeBuiltinModelOperationModalities,
@@ -547,7 +548,9 @@ export async function fetchLiveProviderModels(
 		fetchModelsDevProviderModels(modelsDevUrl, fetcher).catch(
 			() => emptyProviderModels,
 		),
-		fetchClineRecommendedModelsPayload(fetcher).catch(() => undefined),
+		isClineCloudServicesEnabled()
+			? fetchClineRecommendedModelsPayload(fetcher).catch(() => undefined)
+			: Promise.resolve(undefined),
 	]);
 	const clineRecommended = clineRecommendedPayload
 		? normalizeClineRecommendedProviderModels(

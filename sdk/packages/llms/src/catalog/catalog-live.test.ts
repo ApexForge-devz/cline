@@ -14,6 +14,8 @@ import {
 } from "./catalog-live";
 
 describe("models-dev-catalog", () => {
+	beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+	afterEach(() => vi.unstubAllEnvs());
 	it("preserves model adapters and narrowly fills missing Go Qwen declarations", () => {
 		const models = {
 			muse: { tool_call: true, provider: { npm: "@ai-sdk/openai" } },
@@ -1123,6 +1125,24 @@ describe("models-dev-catalog", () => {
 
 		expect(fetcher).toHaveBeenCalledWith("https://models.dev/api.json");
 		expect(result["openai-native"]).toHaveProperty("gpt-live");
+	});
+
+it("does not fetch Cline-hosted recommendation models when cloud services are disabled", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		const fetcher = vi.fn(async () => ({
+			ok: true,
+			json: async () => ({
+				openai: { models: { "gpt-live": { name: "GPT Live", tool_call: true } } },
+			}),
+		}));
+		const result = await fetchLiveProviderModels(
+			"https://models.dev/api.json",
+			fetcher as unknown as typeof fetch,
+		);
+		expect(fetcher).toHaveBeenCalledTimes(1);
+		expect(fetcher).toHaveBeenCalledWith("https://models.dev/api.json");
+		expect(result["openai-native"]?.["gpt-live"]?.name).toBe("GPT Live");
+		expect(result["cline-pass"]).toBeUndefined();
 	});
 
 	it("fetches live models from models.dev and Cline recommended clinePass models", async () => {
