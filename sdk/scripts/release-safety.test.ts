@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { assertNamedReleaseBranch } from "./release-safety.ts";
 
 describe("SDK release branch safety", () => {
@@ -17,4 +18,11 @@ describe("SDK release branch safety", () => {
 			"SDK releases require a named branch",
 		);
 	});
+});
+
+const releaseScript = readFileSync(new URL("./release.ts", import.meta.url), "utf8");
+
+test("SDK release never checks out, pulls, or fetches another branch", () => {
+	expect(releaseScript).toContain("await ensureReleaseBranch();");
+	expect(releaseScript).not.toMatch(/run\(\s*\[\s*"git"\s*,\s*"(?:checkout|pull|fetch)"\s*,/);
 });
