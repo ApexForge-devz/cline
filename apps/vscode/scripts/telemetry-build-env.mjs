@@ -18,6 +18,10 @@ export function telemetrySecretDefineValues(env = process.env, warn = console.wa
 	);
 	const allowEmbeddedSecrets = env.CLINE_ALLOW_EMBEDDED_TELEMETRY_SECRETS === "1";
 	const isCiBuild = Boolean(env.CI) || env.GITHUB_ACTIONS === "true";
+	const traceContentRecordingRequested = /^(1|true|yes|on)$/i.test(
+		env.CLINE_TRACE_RECORD_CONTENT?.trim() ?? "",
+	);
+	const allowTraceContentRecording = env.CLINE_ALLOW_TRACE_CONTENT_RECORDING === "1";
 
 	if (configuredSecrets.length > 0 && isCiBuild) {
 		throw new Error(
@@ -58,6 +62,24 @@ export function telemetrySecretDefineValues(env = process.env, warn = console.wa
 		);
 	}
 
+	if (traceContentRecordingRequested && isCiBuild) {
+		throw new Error(
+			"Refusing to enable trace content recording in CI. Model inputs and outputs may contain private workspace data.",
+		);
+	}
+
+	if (traceContentRecordingRequested && !allowTraceContentRecording) {
+		throw new Error(
+			"Refusing to enable trace content recording in a compiled VS Code extension by default. Set CLINE_ALLOW_TRACE_CONTENT_RECORDING=1 for a trusted local-only build.",
+		);
+	}
+
+	if (traceContentRecordingRequested) {
+		warn(
+			"WARNING: trace content recording is enabled for this private local build. Model inputs and outputs may contain private workspace data.",
+		);
+	}
+
 	return {
 		"process.env.TELEMETRY_SERVICE_API_KEY": env.TELEMETRY_SERVICE_API_KEY
 			? JSON.stringify(env.TELEMETRY_SERVICE_API_KEY)
@@ -72,5 +94,10 @@ export function telemetrySecretDefineValues(env = process.env, warn = console.wa
 			allowEmbeddedSecrets ? env.ENABLE_ERROR_AUTOCAPTURE ?? "" : "",
 		),
 		"process.env.CLINE_TELEMETRY_HOST": JSON.stringify(env.CLINE_TELEMETRY_HOST ?? ""),
+		// Define this in every bundle so a runtime environment variable cannot
+		// silently enable content capture in an extension built without opt-in.
+		"process.env.CLINE_TRACE_RECORD_CONTENT": JSON.stringify(
+			traceContentRecordingRequested && allowTraceContentRecording ? "true" : "false",
+		),
 	};
 }
