@@ -36,18 +36,23 @@ console.log(result.text)
 
 That's it. The agent streams its response, calls tools if you give it any, and returns when the task is done.
 
-## Install
+## Build from source
+
+This fork does not publish the upstream `@cline/sdk` package under a separate namespace. From the repository root:
 
 ```bash
-npm install @cline/sdk
+bun install
+bun run build:sdk
 ```
+
+The `@cline/sdk` package and its dependencies are available through this repository's workspace. See `examples/` and `apps/examples/` for runnable code.
 
 ## SDK Skill
 
 If you use a coding agent (Claude Code, Codex, Cline, etc.), install the [Cline SDK skill](../.agents/skills/cline-sdk/SKILL.md) to give your agent context on the SDK's APIs and best practices to help you build with the Cline SDK.
 
-```bash
-npx skills add cline/sdk-skill
+```text
+.agents/skills/cline-sdk/SKILL.md
 ```
 
 Prompt it to scaffold agents, create custom tools, wire up plugins, configure providers, and more.
