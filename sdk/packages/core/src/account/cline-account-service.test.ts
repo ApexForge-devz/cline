@@ -1,7 +1,28 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ClineAccountService } from "./cline-account-service";
 
+const ORIGINAL_CLOUD_SERVICES = process.env.CLINE_ENABLE_CLOUD_SERVICES;
+beforeEach(() => { process.env.CLINE_ENABLE_CLOUD_SERVICES = "1"; });
+afterEach(() => {
+	if (ORIGINAL_CLOUD_SERVICES === undefined) delete process.env.CLINE_ENABLE_CLOUD_SERVICES;
+	else process.env.CLINE_ENABLE_CLOUD_SERVICES = ORIGINAL_CLOUD_SERVICES;
+});
+
 describe("ClineAccountService", () => {
+	it("fails closed without cloud opt-in and does not resolve credentials or fetch", async () => {
+		delete process.env.CLINE_ENABLE_CLOUD_SERVICES;
+		const getAuthToken = vi.fn(async () => "workos:token-123");
+		const fetchImpl = vi.fn();
+		const service = new ClineAccountService({
+			apiBaseUrl: "https://api.cline.bot",
+			getAuthToken,
+			fetchImpl: fetchImpl as unknown as typeof fetch,
+		});
+		await expect(service.fetchMe()).rejects.toThrow(/Cline cloud services are disabled/);
+		expect(getAuthToken).not.toHaveBeenCalled();
+		expect(fetchImpl).not.toHaveBeenCalled();
+	});
+
 	it("fetches current user balance and sends auth header", async () => {
 		const fetchImpl = vi.fn(async (input: unknown, init?: RequestInit) => {
 			expect(String(input)).toBe(

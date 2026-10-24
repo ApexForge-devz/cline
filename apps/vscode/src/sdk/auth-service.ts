@@ -9,6 +9,7 @@
 // This matches the CLI's pattern (see apps/cli/src/runtime/interactive-welcome.ts).
 
 import type { ITelemetryService, OAuthCredentials, ProviderSettings } from "@cline/core"
+import { isClineCloudServicesEnabled } from "@cline/shared"
 import {
 	createOAuthClientCallbacks,
 	getProviderAuthStorageId,
@@ -306,6 +307,7 @@ export class AuthService {
 	 * Fetch user info from the Cline API using an access token.
 	 */
 	private async fetchUserInfoFromApi(accessToken: string): Promise<ClineAccountUserInfo | null> {
+		if (!isClineCloudServicesEnabled()) return null
 		try {
 			const apiBaseUrl = ClineEnv.config().apiBaseUrl
 			// Ensure the token has the workos: prefix for the API
@@ -364,6 +366,7 @@ export class AuthService {
 	 * Refreshes if necessary using the SDK's token management.
 	 */
 	async getAuthToken(): Promise<string | null> {
+		if (!isClineCloudServicesEnabled()) return null
 		if (!this._clineAuthInfo?.idToken) {
 			return null
 		}
@@ -551,6 +554,9 @@ export class AuthService {
 	 * Persists credentials to providers.json.
 	 */
 	async createAuthRequest(strict = false): Promise<String> {
+		if (!isClineCloudServicesEnabled()) {
+			throw new Error("Cline cloud services are disabled. Use a direct model provider such as Ollama or NVIDIA API instead.")
+		}
 		// In strict mode, don't open a new auth window if already authenticated
 		if (strict && this._authenticated) {
 			await this.sendAuthStatusUpdate()

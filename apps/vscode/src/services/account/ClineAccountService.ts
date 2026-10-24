@@ -10,6 +10,7 @@ import type {
 } from "@shared/ClineAccount"
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios"
 import { ClineEnv } from "@/config"
+import { isClineCloudServicesEnabled } from "@cline/shared"
 import { CLINE_API_ENDPOINT } from "@/shared/cline/api"
 import { getAxiosSettings } from "@/shared/net"
 import { Logger } from "@/shared/services/Logger"
@@ -58,6 +59,9 @@ export class ClineAccountService {
 		config: AxiosRequestConfig = {},
 		options?: { allowNullData?: boolean; authToken?: string },
 	): Promise<T> {
+		if (!isClineCloudServicesEnabled()) {
+			throw new Error("Cline cloud services are disabled. Set CLINE_ENABLE_CLOUD_SERVICES=1 to enable Cline account API access.")
+		}
 		const url = new URL(endpoint, this.baseUrl).toString() // Validate URL
 		// IMPORTANT: Prefixed with 'workos:' so backend can route verification to WorkOS provider
 		const clineAccountAuthToken = options?.authToken ?? (await this._authService.getAuthToken())

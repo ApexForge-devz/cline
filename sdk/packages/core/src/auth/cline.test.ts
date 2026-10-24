@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClineOAuthCredentials } from "./cline";
 import {
 	completeClineDeviceAuth,
@@ -10,6 +10,11 @@ const PROVIDER_OPTIONS = {
 	apiBaseUrl: "https://auth.example.com",
 };
 const ORIGINAL_FETCH = globalThis.fetch;
+const ORIGINAL_CLOUD_SERVICES = process.env.CLINE_ENABLE_CLOUD_SERVICES;
+
+beforeEach(() => {
+	process.env.CLINE_ENABLE_CLOUD_SERVICES = "1";
+});
 
 function toBase64Url(value: string): string {
 	return Buffer.from(value, "utf8").toString("base64url");
@@ -37,9 +42,22 @@ function createCredentials(
 }
 
 describe("auth/cline getValidClineCredentials", () => {
+	it("blocks Cline OAuth before any network request when cloud services are disabled", async () => {
+		delete process.env.CLINE_ENABLE_CLOUD_SERVICES;
+		const fetchMock = vi.fn();
+		globalThis.fetch = fetchMock as unknown as typeof fetch;
+		await expect(loginClineOAuth({
+			...PROVIDER_OPTIONS,
+			callbacks: {} as never,
+		})).rejects.toThrow(/Cline cloud services are disabled/);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
 	afterEach(() => {
 		vi.restoreAllMocks();
 		globalThis.fetch = ORIGINAL_FETCH;
+		if (ORIGINAL_CLOUD_SERVICES === undefined) delete process.env.CLINE_ENABLE_CLOUD_SERVICES;
+		else process.env.CLINE_ENABLE_CLOUD_SERVICES = ORIGINAL_CLOUD_SERVICES;
 	});
 
 	it("returns existing credentials when not expired", async () => {

@@ -1,6 +1,7 @@
 import {
 	decodeJwtPayload,
 	getClineEnvironmentConfig,
+	isClineCloudServicesEnabled,
 	type ITelemetryService,
 } from "@cline/shared";
 import { hashSecret, sdkDebug } from "../logging/early-logger";
@@ -519,6 +520,9 @@ export async function loginClineOAuth(
 		callbacks: OAuthLoginCallbacks;
 	},
 ): Promise<ClineOAuthCredentials> {
+	if (!isClineCloudServicesEnabled()) {
+		throw new Error("Cline cloud services are disabled. Set CLINE_ENABLE_CLOUD_SERVICES=1 to enable Cline account authentication.");
+	}
 	captureAuthStarted(options.telemetry, options.provider ?? "cline");
 	const useWorkOSDeviceAuth = options.useWorkOSDeviceAuth ?? true;
 	const callbackPorts = options.callbackPorts?.length
@@ -650,6 +654,9 @@ export async function startClineDeviceAuth(options?: {
 	expiresInSeconds: number;
 	pollIntervalSeconds: number;
 }> {
+	if (!isClineCloudServicesEnabled()) {
+		throw new Error("Cline cloud services are disabled. Set CLINE_ENABLE_CLOUD_SERVICES=1 to enable Cline account authentication.");
+	}
 	return await requestWorkOSDeviceAuthorization(
 		getClineEnvironmentConfig().workOsClientId,
 		options,
@@ -666,6 +673,9 @@ export async function completeClineDeviceAuth(options: {
 	requestTimeoutMs?: number;
 	telemetry?: ITelemetryService;
 }): Promise<ClineOAuthCredentials> {
+	if (!isClineCloudServicesEnabled()) {
+		throw new Error("Cline cloud services are disabled. Set CLINE_ENABLE_CLOUD_SERVICES=1 to enable Cline account authentication.");
+	}
 	const providerName = options.provider ?? "cline";
 	captureAuthStarted(options.telemetry, providerName);
 	try {
@@ -716,6 +726,9 @@ export async function refreshClineToken(
 	current: ClineOAuthCredentials,
 	options: ClineOAuthProviderOptions,
 ): Promise<ClineOAuthCredentials> {
+	if (!isClineCloudServicesEnabled()) {
+		throw new Error("Cline cloud services are disabled. Set CLINE_ENABLE_CLOUD_SERVICES=1 to enable Cline account authentication.");
+	}
 	const refreshUrl = resolveUrl(
 		options.apiBaseUrl,
 		DEFAULT_AUTH_ENDPOINTS.refresh,
@@ -778,6 +791,9 @@ export async function getValidClineCredentials(
 	providerOptions: ClineOAuthProviderOptions,
 	options?: ClineTokenResolution,
 ): Promise<ClineOAuthCredentials | null> {
+	if (!isClineCloudServicesEnabled()) {
+		throw new Error("Cline cloud services are disabled. Set CLINE_ENABLE_CLOUD_SERVICES=1 to enable Cline account authentication.");
+	}
 	if (!currentCredentials) {
 		sdkDebug("cline.getCredentials outcome=no_current_credentials");
 		return null;
