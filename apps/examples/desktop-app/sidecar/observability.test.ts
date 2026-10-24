@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { version } from "../package.json";
 
 const mocks = vi.hoisted(() => ({
@@ -52,11 +52,31 @@ vi.mock("./logging", () => ({
 
 describe("desktop observability", () => {
 	beforeEach(() => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1");
 		vi.clearAllMocks();
 		mocks.createConfiguredTelemetryHandle.mockReturnValue({
 			telemetry,
 			dispose: mocks.disposeTelemetry,
 		});
+	});
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("does not enrich desktop telemetry from stored Cline account identity when cloud services are disabled", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		const { createDesktopObservability } = await import("./observability");
+		const observability = createDesktopObservability();
+
+		expect(mocks.identifyAccount).not.toHaveBeenCalled();
+		expect(observability.telemetryUser).not.toMatchObject({
+			distinctId: "account-1",
+			accountId: "account-1",
+			organizationId: "org-1",
+		});
+		expect(mocks.captureExtensionActivated).toHaveBeenCalledWith(telemetry);
+		await observability.dispose();
 	});
 
 	it("configures desktop telemetry, identity, activation, and lifecycle", async () => {

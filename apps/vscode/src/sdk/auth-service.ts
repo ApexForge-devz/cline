@@ -1079,7 +1079,9 @@ export class AuthService {
 			// writing providers.json, pushing auth state, …). Transient refresh
 			// failures are handled above and never reach this reason.
 			Logger.error("[SdkAuthService] Error restoring auth token:", error)
-			telemetryService.captureAuthLoggedOut("cline", LogoutReason.RESTORE_ERROR)
+			if (isClineCloudServicesEnabled()) {
+				telemetryService.captureAuthLoggedOut("cline", LogoutReason.RESTORE_ERROR)
+			}
 			this._authenticated = false
 			this._clineAuthInfo = null
 		}

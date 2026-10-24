@@ -7,7 +7,7 @@ import {
 	ProviderSettingsManager,
 	setSdkLogger,
 } from "@cline/core";
-import type { UserContext } from "@cline/shared";
+import { isClineCloudServicesEnabled, type UserContext } from "@cline/shared";
 import {
 	DESKTOP_TELEMETRY_METADATA,
 	resolveDesktopTelemetryUser,
@@ -37,12 +37,15 @@ export function createDesktopObservability(): DesktopObservability {
 		logger,
 	});
 	const telemetry = telemetryHandle.telemetry;
-	const auth = new ProviderSettingsManager().getProviderSettings("cline")?.auth;
+	const cloudServicesEnabled = isClineCloudServicesEnabled();
+	const auth = cloudServicesEnabled
+		? new ProviderSettingsManager().getProviderSettings("cline")?.auth
+		: undefined;
 	const telemetryUser = resolveDesktopTelemetryUser({
 		accountId: auth?.accountId,
 		organizationId: auth?.organizationId,
 	});
-	if (auth?.accountId) {
+	if (cloudServicesEnabled && auth?.accountId) {
 		identifyAccount(telemetry, {
 			id: auth.accountId,
 			provider: "cline",

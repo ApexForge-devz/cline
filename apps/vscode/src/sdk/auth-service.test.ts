@@ -686,6 +686,17 @@ describe("AuthService", () => {
 	})
 
 	describe("restoreRefreshTokenAndRetrieveAuthInfo()", () => {
+		it("does not emit Cline logout telemetry for restore errors when cloud services are disabled", async () => {
+			process.env.CLINE_ENABLE_CLOUD_SERVICES = "0"
+			vi.spyOn(authService, "sendAuthStatusUpdate").mockRejectedValue(new Error("state push failed"))
+
+			await authService.restoreRefreshTokenAndRetrieveAuthInfo()
+
+			expect(mockCaptureAuthLoggedOut).not.toHaveBeenCalled()
+			expect(testAccess(authService)._authenticated).toBe(false)
+			expect(testAccess(authService)._clineAuthInfo).toBeNull()
+		})
+
 		it("does not inspect or refresh saved Cline credentials when cloud services are disabled", async () => {
 			process.env.CLINE_ENABLE_CLOUD_SERVICES = "0"
 			mockProviderSettings.set("cline", {
