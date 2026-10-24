@@ -18,7 +18,6 @@ const OTEL_ENV_VARS = [
 	"OTEL_EXPORTER_OTLP_ENDPOINT",
 	"OTEL_METRIC_EXPORT_INTERVAL",
 	"CLINE_TRACE_SAMPLE_PERCENT",
-	"CLINE_TRACE_RECORD_CONTENT",
 ] as const;
 
 export type TelemetryBuildEnv = Record<string, string | undefined>;
@@ -38,6 +37,11 @@ export function telemetryDefineValues(
 	const allowEmbeddedSecrets =
 		env.CLINE_ALLOW_EMBEDDED_TELEMETRY_SECRETS === "1";
 	const isCiBuild = Boolean(env.CI) || env.GITHUB_ACTIONS === "true";
+	const traceContentRecordingRequested = /^(1|true|yes|on)$/i.test(
+		env.CLINE_TRACE_RECORD_CONTENT?.trim() ?? "",
+	);
+	const allowTraceContentRecording =
+		env.CLINE_ALLOW_TRACE_CONTENT_RECORDING === "1";
 
 	if (configuredSecrets.length > 0 && isCiBuild) {
 		throw new Error(
@@ -66,6 +70,24 @@ export function telemetryDefineValues(
 		);
 	}
 
+	if (traceContentRecordingRequested && isCiBuild) {
+		throw new Error(
+			"Refusing to enable trace content recording in CI. Model inputs and outputs may contain private workspace data.",
+		);
+	}
+
+	if (traceContentRecordingRequested && !allowTraceContentRecording) {
+		throw new Error(
+			"Refusing to enable trace content recording in a compiled CLI binary by default. Set CLINE_ALLOW_TRACE_CONTENT_RECORDING=1 for a trusted local-only build.",
+		);
+	}
+
+	if (traceContentRecordingRequested) {
+		console.warn(
+			"WARNING: trace content recording is enabled for this private local build. Model inputs and outputs may contain private workspace data.",
+		);
+	}
+
 	const defines: Record<string, string> = {};
 	const define = (name: string, value: string) => {
 		defines["process.env." + name] = JSON.stringify(value);
@@ -83,6 +105,7 @@ export function telemetryDefineValues(
 	for (const name of OTEL_ENV_VARS) {
 		define(name, env[name] ?? "");
 	}
+	define("CLINE_TRACE_RECORD_CONTENT", traceContentRecordingRequested && allowTraceContentRecording ? "true" : "false");
 	define("OTEL_EXPORTER_OTLP_HEADERS", env.OTEL_EXPORTER_OTLP_HEADERS ?? "");
 
 	return defines;
