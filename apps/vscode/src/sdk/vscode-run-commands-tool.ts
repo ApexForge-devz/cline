@@ -20,7 +20,7 @@ import {
 	type StructuredCommandInput,
 	truncateCommandOutput,
 } from "@cline/core"
-import type { AgentTool } from "@cline/shared"
+import { getShellKind, type AgentTool } from "@cline/shared"
 import { TerminalUserInterventionAction, telemetryService } from "@services/telemetry"
 import { ClineTempManager } from "@services/temp"
 import * as fs from "fs"
@@ -84,24 +84,49 @@ export interface VscodeRunCommandsToolOptions {
 // Foreground execution — VscodeTerminalManager
 // ---------------------------------------------------------------------------
 
-function quoteShellArg(arg: string): string {
+function quotePosixArg(arg: string): string {
 	if (arg.length === 0) {
 		return "''"
 	}
-	if (!/[\s"'\\$`!&|;<>(){}[\]*?~]/.test(arg)) {
+	if (!/[\\s"'\\\\$`!&|;<>(){}[\\]*?~]/.test(arg)) {
 		return arg
 	}
-	return `'${arg.replace(/'/g, `'\\''`)}'`
+	return "'" + arg.replace(/'/g, "'\\''") + "'"
 }
 
-export function formatCommandForTerminal(command: ShellCommand): string {
+function quotePowerShellArg(arg: string): string {
+	// PowerShell single-quoted strings are literal; doubled quotes represent an apostrophe.
+	return "'" + arg.replace(/'/g, "''") + "'"
+}
+
+function quoteCmdArg(arg: string): string {
+	if (arg.length === 0) return '""'
+	const needsQuotes = /[\\s"&|<>^()]/.test(arg)
+	if (!needsQuotes) return arg
+	// Follow Windows argv quoting rules for embedded quotes and trailing backslashes.
+	const escaped = arg.replace(/(\\*)"/g, '$1$1\\\"').replace(/(\\+)$/, '$1$1')
+	return '"' + escaped + '"'
+}
+
+export function formatCommandForTerminal(command: ShellCommand, shellPath?: string): string {
 	if (typeof command === "string") {
 		return command
 	}
 	if (!("args" in command)) {
 		return command.command
 	}
-	return [command.command, ...(command.args ?? [])].map(quoteShellArg).join(" ")
+	const argv = [command.command, ...(command.args ?? [])]
+	const shellKind = shellPath ? getShellKind(shellPath) : "posix"
+	switch (shellKind) {
+		case "powershell":
+			return "& " + argv.map(quotePowerShellArg).join(" ")
+		case "cmd":
+			return argv.map(quoteCmdArg).join(" ")
+		case "wsl":
+		case "posix":
+		default:
+			return argv.map(quotePosixArg).join(" ")
+	}
 }
 
 /**
@@ -228,7 +253,8 @@ export async function executeForeground(
 	foregroundCommands?: SdkForegroundCommandCoordinator,
 	terminalProfileId?: string,
 ): Promise<string> {
-	const terminalCommand = formatCommandForTerminal(command)
+	const shellPath = getShellForProfile(terminalProfileId ?? "default")
+	const terminalCommand = formatCommandForTerminal(command, shellPath)
 
 	// "Proceed While Running": register a per-invocation handle so the user can
 	// detach this command. If they do not act, automatically detach after 300
