@@ -54,6 +54,10 @@ describe("CloudSessionApi", () => {
 		});
 
 		await expect(api.list()).rejects.toMatchObject({ code: "request_failed" });
+		await expect(api.create({ modelId: "model", repoUrl: "https://github.com/example/repo" }))
+			.rejects.toMatchObject({ code: "request_failed" });
+		await expect(api.waitUntilReady("ses-outer", new AbortController().signal))
+			.rejects.toMatchObject({ code: "request_failed" });
 		await expect(api.history("ses-outer")).rejects.toMatchObject({ code: "request_failed" });
 		expect(getAuthToken).not.toHaveBeenCalled();
 		expect(fetch).not.toHaveBeenCalled();

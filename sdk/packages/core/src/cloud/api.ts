@@ -560,6 +560,7 @@ export class CloudSessionApi {
 		sandboxUrl: string;
 		cleanupAuthToken: string;
 	}> {
+		assertCloudServicesEnabled();
 		if (input.handoff && typeof input.handoff.onCreating !== "function")
 			throw new CloudSessionError(
 				"request_failed",
@@ -858,6 +859,7 @@ export class CloudSessionApi {
 		signal: AbortSignal,
 		onStatus?: (status: { phase?: CloudProvisioningPhase }) => void,
 	): Promise<void> {
+		assertCloudServicesEnabled();
 		signal = AbortSignal.any([
 			signal,
 			AbortSignal.timeout(this.createTimeoutMs),
