@@ -111,6 +111,7 @@
 	],
 	"license": "Apache-2.0",
 	"scripts": {
+		"prepublishOnly": "bun ../../scripts/guard-direct-publish.ts",
 		"build": "bun run check:theme-generated && bun scripts/validate-theme.ts && bun tsc -p tsconfig.build.json",
 		"check:theme-generated": "bun scripts/generate-theme.ts --check",
 		"generate:theme": "bun scripts/generate-theme.ts",
