@@ -759,6 +759,23 @@ describe("default run_commands tool", () => {
 		]);
 	});
 
+	it("normalizes whitespace-padded serialized command fields before execution", async () => {
+		const execute = vi.fn(async (command: string) => `ran:${command}`);
+		const tool = createShellTool(execute);
+		const nativeToolInput = {
+			commands: String.raw`[ "Get-ChildItem ..\Packs", "Get-ChildItem Assets\Packs" ]`,
+		};
+
+		await tool.execute(nativeToolInput as never, {
+			agentId: "agent-1", conversationId: "conv-1", iteration: 1,
+		});
+
+		expect(execute.mock.calls.map(([command]) => command)).toEqual([
+			String.raw`Get-ChildItem ..\Packs`,
+			String.raw`Get-ChildItem Assets\Packs`,
+		]);
+	});
+
 	it("parses JSON-serialized arrays nested in the commands field", async () => {
 		const execute = vi.fn(async (command: string) => `ran:${command}`);
 		const tool = createShellTool(execute);
@@ -1654,7 +1671,7 @@ describe("default read_files tool", () => {
 	it("normalizes JSON-serialized file path arrays including Windows backslashes", async () => {
 		const execute = vi.fn(async (request: { path: string }) => `content:${request.path}`);
 		const tool = createReadFilesTool(execute);
-		const serialized = String.raw`["C:\Packs\a.ts", "C:\Packs\b.ts"]`;
+		const serialized = String.raw`[ "C:\Packs\a.ts", "C:\Packs\b.ts" ]`;
 		await tool.execute(serialized as never, {
 			agentId: "agent-1", conversationId: "conv-1", iteration: 1,
 		});
