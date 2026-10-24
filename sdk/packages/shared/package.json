@@ -50,6 +50,7 @@
 		"dist"
 	],
 	"scripts": {
+		"prepublishOnly": "bun ../../scripts/guard-direct-publish.ts",
 		"build": "BUILD_MODE=package bun bun.mts",
 		"typecheck": "bun tsc --noEmit",
 		"test": "bun run test:unit",
