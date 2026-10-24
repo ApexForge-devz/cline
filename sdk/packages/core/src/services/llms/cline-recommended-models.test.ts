@@ -96,8 +96,20 @@ function namesOf(data: ClineRecommendedModelsData) {
 }
 
 describe("fetchClineRecommendedModels", () => {
+	beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
 	afterEach(() => {
 		setClineClientIdentity(undefined);
+		vi.unstubAllEnvs();
+	});
+	it("uses the bundled catalog without a request when cloud services are disabled", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		const fetchImpl = vi.fn();
+		const data = await fetchClineRecommendedModels({
+			baseUrl: "https://api.cline.bot",
+			fetchImpl: fetchImpl as unknown as typeof fetch,
+		});
+		expect(data).toEqual(FALLBACK_CLINE_RECOMMENDED_MODELS);
+		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 
 	it("resolves display names from the models catalog", async () => {
@@ -376,6 +388,19 @@ describe("applyClineFeaturedModels", () => {
 });
 
 describe("getCachedClineRecommendedModels", () => {
+	beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+	afterEach(() => vi.unstubAllEnvs());
+	it("does not initiate a feed request on a cold cache when cloud services are disabled", async () => {
+		resetClineRecommendedModelsCacheForTests();
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		const fetchImpl = vi.fn();
+		const data = await getCachedClineRecommendedModels({
+			baseUrl: "https://api.cline.bot",
+			fetchImpl: fetchImpl as unknown as typeof fetch,
+		});
+		expect(data).toEqual(FALLBACK_CLINE_RECOMMENDED_MODELS);
+		expect(fetchImpl).not.toHaveBeenCalled();
+	});
 	it("serves one fetch to concurrent and subsequent callers", async () => {
 		resetClineRecommendedModelsCacheForTests();
 		let calls = 0;
@@ -471,6 +496,8 @@ describe("getCachedClineRecommendedModels", () => {
 });
 
 describe("peekClineRecommendedModels", () => {
+	beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+	afterEach(() => vi.unstubAllEnvs());
 	it("returns the bundled fallback when the cache is cold", () => {
 		resetClineRecommendedModelsCacheForTests();
 		expect(peekClineRecommendedModels()).toEqual(
@@ -504,6 +531,8 @@ describe("peekClineRecommendedModels", () => {
 });
 
 describe("generated offline featured models", () => {
+	beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+	afterEach(() => vi.unstubAllEnvs());
 	it("preserves every generated tier and its authored order without loading a live catalog", async () => {
 		let catalogLoaded = false;
 		const data = await fetchClineRecommendedModels({

@@ -2837,7 +2837,26 @@ describe("listLocalProviders", () => {
 		({ manager, cleanup } = makeTempManager());
 	});
 
-	afterEach(() => cleanup());
+	afterEach(() => {
+		cleanup();
+		vi.unstubAllEnvs();
+	});
+
+	it("hides Cline-hosted providers by default while preserving Ollama and registered providers", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		await addLocalProvider(manager, {
+			providerId: "configured-third-party",
+			name: "Configured third party",
+			baseUrl: "https://provider.example/v1",
+			models: ["test-model"],
+		});
+		const { providers } = await listLocalProviders(manager, { isClinePassEnabled: true });
+		const ids = providers.map((provider) => provider.id);
+		expect(ids).not.toContain("cline");
+		expect(ids).not.toContain("cline-pass");
+		expect(ids).toContain("ollama");
+		expect(ids).toContain("configured-third-party");
+	});
 
 	it("sends authentication facts for builtins and registered providers", async () => {
 		LlmsModels.registerProvider({
@@ -2914,6 +2933,7 @@ describe("listLocalProviders", () => {
 	});
 
 	it("includes ClinePass when the ClinePass feature flag is enabled", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1");
 		const { providers } = await listLocalProviders(manager, {
 			isClinePassEnabled: true,
 		});
@@ -2922,6 +2942,7 @@ describe("listLocalProviders", () => {
 	});
 
 	it("stamps featured tiers from the bundled fallback without a feed fetch", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1");
 		const fetchMock = vi.fn();
 		vi.stubGlobal("fetch", fetchMock);
 
@@ -2948,6 +2969,7 @@ describe("listLocalProviders", () => {
 	});
 
 	it("stamps featured tiers from the cached live feed once warmed", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1");
 		const clineModelIds = Object.keys(
 			await LlmsModels.getModelsForProvider("cline"),
 		);
@@ -3038,6 +3060,7 @@ describe("listLocalProviders", () => {
 	});
 
 	it("resolves shared OAuth metadata for ClinePass catalog entries", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1");
 		manager.saveProviderSettings(
 			{
 				provider: "cline",
@@ -3064,6 +3087,7 @@ describe("listLocalProviders", () => {
 	});
 
 	it("enables ClinePass from a Cline sign-in that never wrote a ClinePass entry", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1");
 		// Desktop onboarding signs in as "cline" only; the shared credentials
 		// make ClinePass usable, so it must surface as enabled without its own
 		// providers.json entry.
@@ -3094,6 +3118,7 @@ describe("listLocalProviders", () => {
 	});
 
 	it("keeps ClinePass disabled when Cline has no entry", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1");
 		const { providers } = await listLocalProviders(manager, {
 			isClinePassEnabled: true,
 		});
@@ -3179,6 +3204,7 @@ describe("listLocalProviders", () => {
 	});
 
 	it("uses Cline-specific Z.ai aliases in the built-in model list", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1");
 		manager.saveProviderSettings(
 			{
 				provider: "cline",

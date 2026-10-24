@@ -10,6 +10,7 @@ import type {
 	GatewayResolvedProviderConfig,
 } from "@cline/shared";
 import {
+	isClineCloudServicesEnabled,
 	modelProducesImages,
 	usesImageGenerationOperation,
 } from "@cline/shared";
@@ -93,9 +94,23 @@ function normalizeDomains(value: string[] | undefined): string[] | undefined {
 	return domains?.length ? domains : undefined;
 }
 
+function isClineHostedBaseUrl(baseURL: string): boolean {
+	try {
+		const hostname = new URL(baseURL).hostname.toLowerCase();
+		return hostname === "cline.bot" || hostname.endsWith(".cline.bot");
+	} catch {
+		return false;
+	}
+}
+
 function createClineFetch(options: ClineProviderOptions): typeof fetch {
 	const baseFetch = ensureFetch(options.fetch);
 	return (async (input, init) => {
+		if (!isClineCloudServicesEnabled() && isClineHostedBaseUrl(options.baseURL)) {
+			throw new Error(
+				"Cline-hosted inference is disabled. Set CLINE_ENABLE_CLOUD_SERVICES=1 to enable it.",
+			);
+		}
 		const response = await baseFetch(input, init);
 		await options.onResponseError?.(response);
 		return response;

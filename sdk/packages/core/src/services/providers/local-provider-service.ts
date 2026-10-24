@@ -13,6 +13,7 @@ import type {
 	VoiceInputSelection,
 } from "@cline/shared";
 import {
+	isClineCloudServicesEnabled,
 	isTranscriptionModel,
 	MODEL_TOOL_NAMES,
 	resolveProviderLocalCli,
@@ -1060,8 +1061,14 @@ export async function listLocalProviders(
 			a.provider.id.localeCompare(b.provider.id)
 		);
 	});
-	let providers = providerEntries.map((entry) => entry.provider);
-	if (options.isClinePassEnabled !== true) {
+let providers = providerEntries.map((entry) => entry.provider);
+	if (!isClineCloudServicesEnabled()) {
+		providers = providers.filter(
+			(provider) =>
+				provider.id !== CLINE_PROVIDER_ID &&
+				provider.id !== CLINE_PASS_PROVIDER_ID,
+		);
+	} else if (options.isClinePassEnabled !== true) {
 		providers = providers.filter(
 			(provider) => provider.id !== CLINE_PASS_PROVIDER_ID,
 		);

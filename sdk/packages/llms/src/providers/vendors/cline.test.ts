@@ -3,7 +3,7 @@ import type {
 	GatewayResolvedProviderConfig,
 	GatewayStreamRequest,
 } from "@cline/shared";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { composeAiSdkProviderOptions } from "../routing/provider-options";
 import { createCline, createClineProviderModule } from "./cline";
 
@@ -12,6 +12,38 @@ describe("createCline", () => {
 
 	beforeEach(() => {
 		fetchMock.mockReset();
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1");
+	});
+
+	afterEach(() => vi.unstubAllEnvs());
+
+it("blocks Cline-hosted inference before fetch when cloud services are disabled", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		const cline = createCline({
+			apiKey: "test-key",
+			baseURL: "https://api.cline.bot/api/v1",
+			fetch: fetchMock,
+		});
+		await expect(
+			cline("anthropic/claude-sonnet-4.6").doGenerate({
+				prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+			}),
+		).rejects.toThrow("Cline-hosted inference is disabled");
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("allows explicitly configured NVIDIA API endpoints while cloud services are disabled", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		fetchMock.mockResolvedValue(jsonCompletionResponse("nvidia/test-model"));
+		const provider = createCline({
+			apiKey: "nvidia-key",
+			baseURL: "https://integrate.api.nvidia.com/v1",
+			fetch: fetchMock,
+		});
+		await provider("nvidia/test-model").doGenerate({
+			prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }],
+		});
+		expect(fetchMock).toHaveBeenCalledOnce();
 	});
 
 	it("exposes web search as a provider-defined client tool", () => {
