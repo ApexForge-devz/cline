@@ -1,7 +1,7 @@
 {
 	"name": "@cline/vscode",
 	"displayName": "Cline ApexForge Chat",
-	"description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way. Backed by the Cline CLI runtime.",
+	"description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way. Backed by the local Cline SDK runtime.",
 	"version": "0.0.0",
 	"private": true,
 	"publisher": "apexforge-devz",
