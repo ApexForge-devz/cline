@@ -912,6 +912,39 @@ describe("default run_commands tool", () => {
 		expect(execute).not.toHaveBeenCalled();
 	});
 
+	it("preserves shell tests in commands fields while normalizing structured args", async () => {
+		const execute = vi.fn(
+			async (command: string | { command: string; args?: string[] }) =>
+				typeof command === "string"
+					? "ran:" + command
+					: "ran:" + command.command + ":" + JSON.stringify(command.args ?? []),
+		);
+		const tool = createShellTool(execute);
+		const context = {
+			agentId: "agent-1",
+			conversationId: "conversation-1",
+			iteration: 1,
+		};
+
+		await tool.execute({ commands: '[ "value" ]' } as never, context);
+		await tool.execute({
+			commands: [{ command: "tool.exe", args: '[ "one arg" ]' }],
+		} as never, context);
+
+		expect(execute).toHaveBeenNthCalledWith(
+			1,
+			'[ "value" ]',
+			process.cwd(),
+			expect.anything(),
+		);
+		expect(execute).toHaveBeenNthCalledWith(
+			2,
+			{ command: "tool.exe", args: ["one arg"] },
+			process.cwd(),
+			expect.anything(),
+		);
+	});
+
 	it("preserves bracket-based shell test commands and quote-containing regexes", async () => {
 		const execute = vi.fn(async (command: string) => `ran:${command}`);
 		const tool = createShellTool(execute);
