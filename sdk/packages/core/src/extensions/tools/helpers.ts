@@ -237,8 +237,8 @@ function parseSerializedArrayInput(
 }
 
 /**
- * Recover JSON-encoded arrays at the top level and in named fields, including
- * nested object entries. Plain command strings and regex patterns remain intact.
+ * Normalize structured object entries after an array has been parsed.
+ * String entries are left untouched because they are command/path/query data.
  */
 function normalizeParsedArrayEntries(
 	entries: unknown[],

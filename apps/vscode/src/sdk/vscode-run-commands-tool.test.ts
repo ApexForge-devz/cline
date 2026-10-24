@@ -386,8 +386,8 @@ describe("formatCommandForTerminal", () => {
 		)
 	})
 
-	it("rejects cmd.exe arguments that would be expanded by the shell", () => {
-		expect(() => formatCommandForTerminal({ command: "tool.exe", args: ["%PATH%"] }, "cmd.exe")).toThrow(
+	it.each(["%PATH%", "!PATH!"])("rejects cmd.exe arguments that would be expanded by the shell: %s", (arg) => {
+		expect(() => formatCommandForTerminal({ command: "tool.exe", args: [arg] }, "cmd.exe")).toThrow(
 			/cmd\.exe may expand %NAME% or !NAME!/,
 		)
 	})
