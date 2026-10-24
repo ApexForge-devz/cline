@@ -14,6 +14,7 @@ describe("telemetryDefineValues", () => {
 			OTEL_LOGS_EXPORTER: "otlp",
 			OTEL_METRICS_EXPORTER: "otlp",
 			OTEL_TRACES_EXPORTER: "otlp",
+			CLINE_TRACE_SAMPLE_PERCENT: "25",
 			OTEL_EXTRA_SECRET: "must-not-be-inlined",
 		});
 
@@ -23,6 +24,7 @@ describe("telemetryDefineValues", () => {
 		);
 		expect(defines["process.env.OTEL_EXPORTER_OTLP_PROTOCOL"]).toBe('"http/json"');
 		expect(defines["process.env.OTEL_EXPORTER_OTLP_HEADERS"]).toBe('""');
+		expect(defines["process.env.CLINE_TRACE_SAMPLE_PERCENT"]).toBe('"25"');
 		expect(defines).not.toHaveProperty("process.env.OTEL_EXTRA_SECRET");
 	});
 
