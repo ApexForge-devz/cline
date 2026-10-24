@@ -79,7 +79,7 @@ if (!dryRun && process.env.CLINE_ALLOW_UPSTREAM_PACKAGE_PUBLISH !== "1") {
 			"This release script still publishes the upstream npm names cline and @cline/*.",
 			"It can also switch to main and pull before release, so do not use it for a fork release before adapting the release workflow and package namespace.",
 			"Run with --dry-run to inspect the planned steps, or set CLINE_ALLOW_UPSTREAM_PACKAGE_PUBLISH=1 only when intentionally publishing to the upstream names.",
-		].join("\\n"),
+		].join("\n"),
 	);
 	process.exit(1);
 }
