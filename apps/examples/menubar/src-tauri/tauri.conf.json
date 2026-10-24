@@ -1,8 +1,8 @@
 {
 	"$schema": "https://schema.tauri.app/config/2",
-	"productName": "Cline Hub",
+	"productName": "Cline ApexForge Hub",
 	"version": "0.0.0",
-	"identifier": "bot.cline.menubar",
+	"identifier": "dev.apexforge.cline.menubar",
 	"build": {
 		"beforeDevCommand": "bun run build:sidecar:bin",
 		"beforeBuildCommand": "bun run build:sidecar:bin",
