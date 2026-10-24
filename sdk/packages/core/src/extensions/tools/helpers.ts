@@ -193,9 +193,6 @@ function hasTopLevelShellOperator(value: string): boolean {
 	let inDouble = false;
 	let inSingle = false;
 	let escapeNext = false;
-	let nestedArrays = 0;
-	let nestedObjects = 0;
-	let nestedParens = 0;
 
 	for (let index = 1; index < value.length - 1; index += 1) {
 		const character = value[index];
@@ -203,7 +200,9 @@ function hasTopLevelShellOperator(value: string): boolean {
 			escapeNext = false;
 			continue;
 		}
-		if ((inDouble || inSingle) && character === "\\") {
+		// Backslash escapes are active outside quotes and inside double quotes,
+		// but not inside POSIX-style single-quoted text.
+		if (character === "\\" && !inSingle) {
 			escapeNext = true;
 			continue;
 		}
@@ -217,34 +216,11 @@ function hasTopLevelShellOperator(value: string): boolean {
 		}
 		if (inDouble || inSingle) continue;
 
-		switch (character) {
-			case "[":
-				nestedArrays += 1;
-				break;
-			case "]":
-				nestedArrays -= 1;
-				break;
-			case "{":
-				nestedObjects += 1;
-				break;
-			case "}":
-				nestedObjects -= 1;
-				break;
-			case "(":
-				nestedParens += 1;
-				break;
-			case ")":
-				nestedParens = Math.max(0, nestedParens - 1);
-				break;
-			default:
-				if (
-					nestedArrays === 0 &&
-					nestedObjects === 0 &&
-					nestedParens === 0 &&
-					/[;&|<>\r\n]/.test(character)
-				) {
-					return true;
-				}
+		// A valid JSON array can contain shell operators only inside its quoted
+		// string values. Check all unquoted text, including parentheses and
+		// nested brackets, because those can also contain executable shell syntax.
+		if (/[;&|<>\r\n]/.test(character)) {
+			return true;
 		}
 	}
 	return false;
