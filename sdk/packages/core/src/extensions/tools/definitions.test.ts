@@ -583,6 +583,12 @@ describe("default apply_patch tool", () => {
 });
 
 describe("run_commands tool description", () => {
+	it("warns about cmd.exe arguments that cannot be safely represented", () => {
+		const description = buildRunCommandsDescription("cmd.exe", true);
+		expect(description).toContain("literal double quotes, %NAME%, or !NAME!");
+		expect(description).toContain("Use PowerShell or WSL for those arguments");
+	});
+
 	it.each([
 		"powershell",
 		"powershell.exe",
