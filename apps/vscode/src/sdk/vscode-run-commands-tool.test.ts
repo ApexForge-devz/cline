@@ -336,19 +336,19 @@ describe("formatCommandForTerminal", () => {
 	})
 
 	it("uses PowerShell literal-string quoting for structured args", () => {
-		expect(formatCommandForTerminal({ command: "echo", args: ["it's ok", "hello world"] }, "C:\\Program Files\\PowerShell\\7\\pwsh.exe").toBe(
+		expect(formatCommandForTerminal({ command: "echo", args: ["it's ok", "hello world"] }, "C:\\Program Files\\PowerShell\\7\\pwsh.exe")).toBe(
 			"& 'echo' 'it''s ok' 'hello world'",
 		)
 	})
 
 	it("uses cmd.exe double-quote rules for structured args", () => {
-		expect(formatCommandForTerminal({ command: "echo", args: ["it's ok", "hello world"] }, "C:\\Windows\\System32\\cmd.exe").toBe(
+		expect(formatCommandForTerminal({ command: "echo", args: ["it's ok", "hello world"] }, "C:\\Windows\\System32\\cmd.exe")).toBe(
 			'echo "it\'s ok" "hello world"',
 		)
 	})
 
 	it("escapes embedded quotes when formatting cmd.exe arguments", () => {
-		expect(formatCommandForTerminal({ command: "tool.exe", args: ['a"b'] }, "cmd.exe")).toBe('tool.exe "a\\\\"b"')
+		expect(formatCommandForTerminal({ command: "tool.exe", args: ['a"b'] }, "cmd.exe")).toBe('tool.exe "a\\"b"')
 	})
 
 	it("quotes multiple structured args that need shell escaping", () => {

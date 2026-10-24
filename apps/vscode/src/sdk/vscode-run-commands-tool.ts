@@ -85,12 +85,9 @@ export interface VscodeRunCommandsToolOptions {
 // ---------------------------------------------------------------------------
 
 function quotePosixArg(arg: string): string {
-	if (arg.length === 0) {
-		return "''"
-	}
-	if (!/[\\s"'\\\\$`!&|;<>(){}[\\]*?~]/.test(arg)) {
-		return arg
-	}
+	if (arg.length === 0) return "''"
+	const needsQuotes = [...arg].some((character) => !/[A-Za-z0-9_./:@+=,-]/.test(character))
+	if (!needsQuotes) return arg
 	return "'" + arg.replace(/'/g, "'\\''") + "'"
 }
 
@@ -101,10 +98,10 @@ function quotePowerShellArg(arg: string): string {
 
 function quoteCmdArg(arg: string): string {
 	if (arg.length === 0) return '""'
-	const needsQuotes = /[\\s"&|<>^()]/.test(arg)
+	const needsQuotes = [...arg].some((character) => !/[A-Za-z0-9_./:@+=,-]/.test(character))
 	if (!needsQuotes) return arg
-	// Follow Windows argv quoting rules for embedded quotes and trailing backslashes.
-	const escaped = arg.replace(/(\\*)"/g, '$1$1\\\"').replace(/(\\+)$/, '$1$1')
+	// Double quotes group arguments in cmd.exe; preserve embedded quotes and trailing backslashes.
+	const escaped = arg.replace(/"/g, "\\" + '"' ).replace(/\\+$/, (slashes) => slashes + slashes)
 	return '"' + escaped + '"'
 }
 
