@@ -4,10 +4,12 @@ sidebarTitle: "OpenTelemetry"
 description: "Export Cline telemetry to your observability platform using OpenTelemetry Protocol (OTLP)"
 ---
 
-Cline includes opt-in OpenTelemetry support for exporting metrics and logs to your own observability infrastructure using the OpenTelemetry Protocol (OTLP).
+This fork supports OpenTelemetry (OTLP) for exporting metrics, logs, and traces to a collector you configure.
 
 <Note>
-OpenTelemetry integration is **optional** and intended for advanced users with existing observability infrastructure. Most users won't need this feature.
+**Fork-specific behavior:** by default, this fork ignores organization-provided OpenTelemetry collector endpoints and authentication headers from remote configuration. For a local, independent setup, configure a collector using the runtime environment variables described in the extension's `otel-config.ts` or the SDK's `OTEL_*` build configuration.
+
+To explicitly accept organization-managed collector settings from remote configuration, set `CLINE_ALLOW_REMOTE_TELEMETRY=1` in the environment of the running extension/CLI process before launching it. This permits the authenticated organization's remote configuration to choose collector endpoints and headers. Only enable it for an organization you trust. It does not disable or redirect other account/API requests to the configured Cline cloud service.
 </Note>
 
 ## What is OpenTelemetry?
@@ -44,7 +46,7 @@ Cline supports three OTLP export protocols:
 
 ## Configuration
 
-OpenTelemetry is configured using [Remote Configuration](/enterprise-solutions/configuration/remote-configuration/overview#how-remote-configuration-works) from the [dashboard](https://app.cline.bot/dashboard/organization?tab=settings).
+In the fork, the dashboard workflow below applies only when you intentionally use the original Cline organization remote-config service and have enabled `CLINE_ALLOW_REMOTE_TELEMETRY=1`. Otherwise, configure your collector locally using runtime `CLINE_OTEL_*` settings in the VS Code host environment, or the SDK's build-time `OTEL_*` variables. Remote configuration is not required for a local collector.
 
 ### Basic Setup
 
