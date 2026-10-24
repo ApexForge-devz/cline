@@ -260,6 +260,7 @@ function parseSerializedArrayInput(
 	value: string,
 	description: string,
 	allowSingleElementArray = false,
+	preserveAmbiguousBracketCommand = false,
 ): unknown[] | undefined {
 	const trimmed = value.trim();
 	if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return undefined;
@@ -288,7 +289,7 @@ function parseSerializedArrayInput(
 	if (
 		hasWhitespaceAfterOpeningBracket &&
 		!hasSeparator &&
-		!allowSingleElementArray &&
+		(!allowSingleElementArray || preserveAmbiguousBracketCommand) &&
 		firstEntry !== "{" &&
 		!hasShellOperator
 	) {
@@ -375,7 +376,12 @@ export function normalizeSerializedArrayInputs(
 	const normalized: Record<string, unknown> = { ...(input as Record<string, unknown>) };
 	for (const [field, value] of Object.entries(normalized)) {
 		if (arrayFields.includes(field) && typeof value === "string") {
-			const parsed = parseSerializedArrayInput(value, description, true);
+			const parsed = parseSerializedArrayInput(
+				value,
+				description,
+				true,
+				description === "command" && field === "commands",
+			);
 			if (parsed) {
 				normalized[field] = normalizeParsedArrayEntries(parsed, arrayFields, description);
 				changed = true;
