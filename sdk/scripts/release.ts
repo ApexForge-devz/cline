@@ -72,6 +72,18 @@ if (explicitVersion && !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(explicitVersion)) {
 	process.exit(1);
 }
 
+if (!dryRun && process.env.CLINE_ALLOW_UPSTREAM_PACKAGE_PUBLISH !== "1") {
+	console.error(
+		[
+			"Publishing is blocked by default in this fork.",
+			"This release script still publishes the upstream npm names cline and @cline/*.",
+			"It can also switch to main and pull before release, so do not use it for a fork release before adapting the release workflow and package namespace.",
+			"Run with --dry-run to inspect the planned steps, or set CLINE_ALLOW_UPSTREAM_PACKAGE_PUBLISH=1 only when intentionally publishing to the upstream names.",
+		].join("\\n"),
+	);
+	process.exit(1);
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const SDK_PUBLISH_ORDER = ["shared", "llms", "agents", "core", "sdk"] as const;
