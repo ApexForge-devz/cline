@@ -1,7 +1,17 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadCloudModels } from "./models";
 
+beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+afterEach(() => vi.unstubAllEnvs());
+
 describe("loadCloudModels", () => {
+	it("does not request the Cline cloud model catalog when cloud services are disabled", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		const fetcher = vi.fn(async () => new Response(JSON.stringify([])));
+		await expect(loadCloudModels("https://api.cline.bot", { fetchImpl: fetcher as unknown as typeof fetch }))
+			.rejects.toThrow(/Cline cloud services are disabled/);
+		expect(fetcher).not.toHaveBeenCalled();
+	});
 	it.each([
 		[" https://api.example.test/// \n", "https://api.example.test"],
 		[

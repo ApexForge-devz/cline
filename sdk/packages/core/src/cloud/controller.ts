@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { posix } from "node:path";
+import { isClineCloudServicesEnabled } from "@cline/shared";
 import type {
 	BasicLogger,
 	HubEventEnvelope,
@@ -677,6 +678,9 @@ export class CloudSessionController {
 	}
 
 	async list(): Promise<CloudSessionRecord[]> {
+		if (!isClineCloudServicesEnabled()) {
+			throw new CloudSessionError("request_failed", "Cline cloud services are disabled. Set CLINE_ENABLE_CLOUD_SERVICES=1 to enable cloud sessions.");
+		}
 		if (this.disposed) throw new Error("Cloud session controller was disposed");
 		const organizationId = await this.resolveActiveOrganizationId();
 		const listed = (await this.options.api.list(organizationId)).map(
@@ -797,6 +801,7 @@ export class CloudSessionController {
 	private async resolveActiveOrganizationId(options?: {
 		fresh?: boolean;
 	}): Promise<string | undefined> {
+		if (!isClineCloudServicesEnabled()) return undefined;
 		return await this.options.getActiveOrganizationId?.(options);
 	}
 
@@ -2140,6 +2145,9 @@ export class CloudSessionController {
 		outerSessionId: string,
 		options: { createInner?: boolean; handoffSeed?: CloudHandoffSeed } = {},
 	): Promise<CloudConnection> {
+		if (!isClineCloudServicesEnabled()) {
+			throw new CloudSessionError("request_failed", "Cline cloud services are disabled. Set CLINE_ENABLE_CLOUD_SERVICES=1 to enable cloud sessions.");
+		}
 		const generation = this.sessionGenerations.get(outerSessionId) ?? 0;
 		const assertCurrent = () => {
 			this.assertSessionActive(outerSessionId);

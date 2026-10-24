@@ -1,6 +1,6 @@
 import { HubCommandError, HubTransportError } from "@cline/core";
 import type { HubEventEnvelope } from "@cline/shared";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	CloudSessionApi,
 	CloudSessionManager,
@@ -104,6 +104,9 @@ async function createFixture() {
 
 const transportError = () =>
 	new HubTransportError("hub_connection_closed", "socket closed");
+
+beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+afterEach(() => vi.unstubAllEnvs());
 
 describe("CloudSessionManager state", () => {
 	it("keeps a pending send cancelled when deletion clears its abort token", async () => {

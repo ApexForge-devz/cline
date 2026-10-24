@@ -1,5 +1,5 @@
 import type { MessageWithMetadata } from "@cline/shared";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	CloudHandoffCreationRejectedError,
 	CloudSessionApi,
@@ -8,6 +8,9 @@ import {
 	type CloudSessionRecord,
 	type CreateCloudSessionInput,
 } from "./api";
+
+beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+afterEach(() => vi.unstubAllEnvs());
 
 const REMOTE_SESSION: CloudSessionRecord = {
 	id: "ses-outer",
@@ -39,6 +42,23 @@ function jwtFor(subject: string, nonce: string): string {
 }
 
 describe("CloudSessionApi", () => {
+	it("blocks cloud requests before resolving credentials when cloud services are disabled", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		const getAuthToken = vi.fn(async () => "saved-token");
+		const fetch = vi.fn(async () => jsonResponse({ data: [] }));
+		const api = new CloudSessionApi({
+			apiBaseUrl: "https://api.cline.bot",
+			appBaseUrl: "https://app.cline.bot",
+			getAuthToken,
+			fetch,
+		});
+
+		await expect(api.list()).rejects.toMatchObject({ code: "request_failed" });
+		await expect(api.history("ses-outer")).rejects.toMatchObject({ code: "request_failed" });
+		expect(getAuthToken).not.toHaveBeenCalled();
+		expect(fetch).not.toHaveBeenCalled();
+	});
+
 	it.each([
 		undefined,
 		"standard",

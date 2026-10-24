@@ -20,6 +20,8 @@ import {
 } from "./session-data/discovery";
 import type { SidecarContext } from "./types";
 
+const originalCloudServices = process.env.CLINE_ENABLE_CLOUD_SERVICES;
+
 const REMOTE_SESSION: CloudSessionRecord = {
 	id: "ses-outer",
 	status: "ready",
@@ -152,9 +154,12 @@ function createFixture({
 
 beforeAll(() => {
 	process.env.CLINE_CODE_CLOUD_AGENTS = "1";
+	process.env.CLINE_ENABLE_CLOUD_SERVICES = "1";
 });
 afterAll(() => {
 	delete process.env.CLINE_CODE_CLOUD_AGENTS;
+	if (originalCloudServices === undefined) delete process.env.CLINE_ENABLE_CLOUD_SERVICES;
+	else process.env.CLINE_ENABLE_CLOUD_SERVICES = originalCloudServices;
 });
 
 describe("Cloud sessions sidecar wiring", () => {

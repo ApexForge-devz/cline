@@ -4,7 +4,7 @@ import {
 	type NodeHubClient,
 } from "@cline/core";
 import type { HubEventEnvelope } from "@cline/shared";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	CloudSessionApi,
 	CloudSessionError,
@@ -231,6 +231,9 @@ function createFixture({
 	});
 	return { ctx, events, hub, manager };
 }
+
+beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+afterEach(() => vi.unstubAllEnvs());
 
 describe("CloudSessionManager Hub runtime", () => {
 	it.each([

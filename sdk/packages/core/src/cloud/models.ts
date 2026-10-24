@@ -1,3 +1,4 @@
+import { isClineCloudServicesEnabled } from "@cline/shared";
 export type CloudModel = {
 	id: string;
 	name: string;
@@ -38,6 +39,9 @@ export async function loadCloudModels(
 	apiBaseUrl: string,
 	options: { isOrganizationSession?: boolean; fetchImpl?: typeof fetch } = {},
 ): Promise<CloudModel[]> {
+	if (!isClineCloudServicesEnabled()) {
+		throw new Error("Cline cloud services are disabled. Set CLINE_ENABLE_CLOUD_SERVICES=1 to enable cloud sessions.");
+	}
 	const trimmedBaseUrl = apiBaseUrl.trim();
 	let end = trimmedBaseUrl.length;
 	while (end > 0 && trimmedBaseUrl[end - 1] === "/") end--;

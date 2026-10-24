@@ -1,11 +1,14 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import WebSocket, { WebSocketServer } from "ws";
 import { CloudSessionApi, type CloudSessionRecord } from "./api";
 import { CloudSessionController } from "./controller";
 
 /** Real REST and WS connections, including the cloud-header/local-Hub-auth boundary. */
+beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+afterEach(() => vi.unstubAllEnvs());
+
 describe("cloud REST and WebSocket integration", () => {
 	it("refreshes Bearer auth, reconciles a real reconnect, and keeps two viewers' approvals consistent", async () => {
 		let token = "first";

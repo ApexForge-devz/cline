@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
 	type AgentMode,
 	decodeJwtPayload,
+	isClineCloudServicesEnabled,
 	type MessageWithMetadata,
 } from "@cline/shared";
 import type {
@@ -118,6 +119,12 @@ export class CloudSessionError extends Error {
 			`${CLOUD_ERROR_PREFIX}${JSON.stringify({ code, message: detail, connectUrl })}`,
 		);
 		this.name = "CloudSessionError";
+	}
+}
+
+function assertCloudServicesEnabled(): void {
+	if (!isClineCloudServicesEnabled()) {
+		throw new CloudSessionError("request_failed", "Cline cloud services are disabled. Set CLINE_ENABLE_CLOUD_SERVICES=1 to enable cloud sessions.");
 	}
 }
 
@@ -279,6 +286,7 @@ export class CloudSessionApi {
 		auth?: RequestAuth,
 		onDispatch?: () => void,
 	): Promise<T> {
+		assertCloudServicesEnabled();
 		let refreshed = false;
 		let rejectedToken: string | undefined;
 		while (true) {
@@ -973,6 +981,7 @@ export class CloudSessionApi {
 
 	/** Raw archived snapshot; null distinguishes a missing archive from []. */
 	async history(sessionId: string): Promise<unknown[] | null> {
+		assertCloudServicesEnabled();
 		const token = await this.options.getAuthToken();
 		if (!token?.trim()) {
 			throw new CloudSessionError(

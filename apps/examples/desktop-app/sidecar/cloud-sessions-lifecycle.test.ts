@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	type CloudSessionApi,
 	CloudSessionError,
@@ -46,6 +46,9 @@ function createContext(): { ctx: SidecarContext } {
 	} as SidecarContext;
 	return { ctx };
 }
+
+beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+afterEach(() => vi.unstubAllEnvs());
 
 describe("CloudSessionManager lifecycle", () => {
 	it.each([

@@ -3,7 +3,7 @@ import type {
 	HubReplyEnvelope,
 	MessageWithMetadata,
 } from "@cline/shared";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toHubSessionRecord } from "../hub/server/hub-session-records";
 import {
 	CloudSessionError,
@@ -20,6 +20,9 @@ import type {
 	CloudHandoffSeed,
 	CloudSessionEvent,
 } from "./types";
+
+beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+afterEach(() => vi.unstubAllEnvs());
 
 const record: CloudSessionRecord = {
 	id: "ses-outer",
@@ -210,6 +213,24 @@ function resumableFixture(status = "ready") {
 }
 
 describe("CloudSessionController neutral host contract", () => {
+	it("does not poll the cloud API when cloud services are disabled", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		const f = fixture();
+		await expect(f.controller.list()).rejects.toMatchObject({ code: "request_failed" });
+		expect(f.api.list).not.toHaveBeenCalled();
+		expect(f.getConnectionOptions()).toBeUndefined();
+	});
+
+	it("does not connect a cached cloud session when cloud services are disabled", async () => {
+		const f = fixture();
+		await f.controller.list();
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+
+		await expect(f.controller.attach(record.id)).rejects.toMatchObject({ code: "request_failed" });
+		expect(f.getConnectionOptions()).toBeUndefined();
+		expect(f.command).not.toHaveBeenCalled();
+	});
+
 	it.each([
 		"suspended",
 		"ready",
