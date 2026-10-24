@@ -183,6 +183,74 @@ function hasTopLevelArraySeparator(value: string): boolean {
 }
 
 /**
+ * Detect shell operators outside quotes and nested JSON containers.
+ * Bracketed command text containing these operators is ambiguous: treating it
+ * as a recoverable command array could either execute a malformed payload or
+ * silently change the requested commands. Valid JSON string entries are
+ * unaffected because their shell operators remain inside quotes.
+ */
+function hasTopLevelShellOperator(value: string): boolean {
+	let inDouble = false;
+	let inSingle = false;
+	let escapeNext = false;
+	let nestedArrays = 0;
+	let nestedObjects = 0;
+	let nestedParens = 0;
+
+	for (let index = 1; index < value.length - 1; index += 1) {
+		const character = value[index];
+		if (escapeNext) {
+			escapeNext = false;
+			continue;
+		}
+		if ((inDouble || inSingle) && character === "\\") {
+			escapeNext = true;
+			continue;
+		}
+		if (!inSingle && character === '"') {
+			inDouble = !inDouble;
+			continue;
+		}
+		if (!inDouble && character === "'") {
+			inSingle = !inSingle;
+			continue;
+		}
+		if (inDouble || inSingle) continue;
+
+		switch (character) {
+			case "[":
+				nestedArrays += 1;
+				break;
+			case "]":
+				nestedArrays -= 1;
+				break;
+			case "{":
+				nestedObjects += 1;
+				break;
+			case "}":
+				nestedObjects -= 1;
+				break;
+			case "(":
+				nestedParens += 1;
+				break;
+			case ")":
+				nestedParens = Math.max(0, nestedParens - 1);
+				break;
+			default:
+				if (
+					nestedArrays === 0 &&
+					nestedObjects === 0 &&
+					nestedParens === 0 &&
+					/[;&|<>\r\n]/.test(character)
+				) {
+					return true;
+				}
+		}
+	}
+	return false;
+}
+
+/**
  * Parse JSON-encoded arrays emitted as strings by some local models.
  * Repair malformed quoting/backslashes only when the input already resembles
  * an array of JSON strings or objects. This avoids interpreting shell bracket
@@ -211,11 +279,18 @@ function parseSerializedArrayInput(
 	}
 	const hasSeparator = hasTopLevelArraySeparator(trimmed);
 	const hasWhitespaceAfterOpeningBracket = /^\[\s+/.test(trimmed);
+	const hasShellOperator = hasTopLevelShellOperator(trimmed);
+	if (description === "command" && hasShellOperator) {
+		throw new Error(
+			"Could not safely interpret bracketed command input containing shell operators outside quoted entries. Pass commands as a valid JSON array or a plain shell command.",
+		);
+	}
 	if (
 		hasWhitespaceAfterOpeningBracket &&
 		!hasSeparator &&
 		!allowSingleElementArray &&
-		firstEntry !== "{"
+		firstEntry !== "{" &&
+		!hasShellOperator
 	) {
 		return undefined;
 	}
