@@ -17,9 +17,16 @@ import {
 	spawnKanbanInstallProcess,
 } from "./kanban";
 
+// Never assume the official "cline" npm package is the update source for this
+// fork. Self-updates stay disabled unless a distributor explicitly configures
+// the package that contains its own published build.
 const DEFAULT_PACKAGE_NAME = "cline";
+export const CLI_UPDATE_PACKAGE_NAME_ENV = "CLINE_UPDATE_PACKAGE_NAME";
 
-type CliPackageName = typeof DEFAULT_PACKAGE_NAME;
+function getConfiguredUpdatePackageName(): string | undefined {
+	const packageName = process.env[CLI_UPDATE_PACKAGE_NAME_ENV]?.trim();
+	return packageName || undefined;
+}
 
 export enum PackageManager {
 	NPM = "npm",
@@ -32,7 +39,7 @@ export enum PackageManager {
 
 interface InstallationInfo {
 	packageManager: PackageManager;
-	packageName: CliPackageName;
+	packageName: string;
 	updateCommand?: string;
 }
 
@@ -85,7 +92,10 @@ function compareVersions(v1: string, v2: string): number {
 	return 0;
 }
 
-export function getInstallationInfo(currentVersion: string): InstallationInfo {
+export function getInstallationInfo(
+	currentVersion: string,
+	packageName = DEFAULT_PACKAGE_NAME,
+): InstallationInfo {
 	const tag = getNpmTag(currentVersion);
 	try {
 		const scriptPath = realpathSync(
@@ -95,7 +105,7 @@ export function getInstallationInfo(currentVersion: string): InstallationInfo {
 		if (scriptPath.includes("/.npm/_npx") || scriptPath.includes("/npm/_npx")) {
 			return {
 				packageManager: PackageManager.NPX,
-				packageName: DEFAULT_PACKAGE_NAME,
+				packageName,
 			};
 		}
 		if (
@@ -104,14 +114,14 @@ export function getInstallationInfo(currentVersion: string): InstallationInfo {
 		) {
 			return {
 				packageManager: PackageManager.PNPM,
-				packageName: DEFAULT_PACKAGE_NAME,
+				packageName,
 				updateCommand: `pnpm add -g ${DEFAULT_PACKAGE_NAME}@${tag}`,
 			};
 		}
 		if (scriptPath.includes("/.yarn/") || scriptPath.includes("/yarn/global")) {
 			return {
 				packageManager: PackageManager.YARN,
-				packageName: DEFAULT_PACKAGE_NAME,
+				packageName,
 				updateCommand: `yarn global add ${DEFAULT_PACKAGE_NAME}@${tag}`,
 			};
 		}
@@ -123,15 +133,15 @@ export function getInstallationInfo(currentVersion: string): InstallationInfo {
 		) {
 			return {
 				packageManager: PackageManager.BUN,
-				packageName: DEFAULT_PACKAGE_NAME,
+				packageName,
 				updateCommand: `bun add -g ${DEFAULT_PACKAGE_NAME}@${tag}`,
 			};
 		}
 		if (scriptPath.includes("/node_modules/")) {
 			return {
 				packageManager: PackageManager.NPM,
-				packageName: DEFAULT_PACKAGE_NAME,
-				updateCommand: `npm update -g ${DEFAULT_PACKAGE_NAME} --tag ${tag}`,
+				packageName,
+				updateCommand: `npm update -g ${packageName} --tag ${tag}`,
 			};
 		}
 	} catch {
@@ -139,7 +149,7 @@ export function getInstallationInfo(currentVersion: string): InstallationInfo {
 	}
 	return {
 		packageManager: PackageManager.UNKNOWN,
-		packageName: DEFAULT_PACKAGE_NAME,
+		packageName,
 	};
 }
 
@@ -312,8 +322,13 @@ export function autoUpdateOnStartup(): void {
 	if (process.env.CLINE_NO_AUTO_UPDATE === "1") return;
 	if (!isAutoUpdateEnabledGlobally()) return;
 
-	const { packageName, packageManager, updateCommand } =
-		getInstallationInfo(version);
+	const packageName = getConfiguredUpdatePackageName();
+	if (!packageName) return;
+
+	const { packageManager, updateCommand } = getInstallationInfo(
+		version,
+		packageName,
+	);
 	if (!updateCommand) return;
 
 	pendingAutoUpdateCheck = (async () => {
@@ -453,15 +468,27 @@ export async function checkForUpdates(
 ): Promise<number> {
 	const currentVersion = version;
 	const includeKanban = options.includeKanban ?? true;
+	const updatePackageName = getConfiguredUpdatePackageName();
+	const targets = [
+		...(updatePackageName ? ["Cline CLI"] : []),
+		...(includeKanban ? ["kanban"] : []),
+	];
 	writeln(
-		`${c.cyan}Checking for updates${includeKanban ? " to Cline CLI and kanban" : ""}…${c.reset}`,
+		`${c.cyan}Checking for updates${targets.length ? ` to ${targets.join(" and ")}` : ""}…${c.reset}`,
 	);
+	if (!updatePackageName) {
+		writeln(
+			`${c.dim}CLI self-updates are disabled for this fork. Set ${CLI_UPDATE_PACKAGE_NAME_ENV} to your published package name to enable them.${c.reset}`,
+		);
+	}
 
 	const { packageName, updateCommand, packageManager } =
-		getInstallationInfo(currentVersion);
+		getInstallationInfo(currentVersion, updatePackageName ?? DEFAULT_PACKAGE_NAME);
 
 	try {
-		const latestVersion = await getLatestVersion(packageName, currentVersion);
+		const latestVersion = updatePackageName
+			? await getLatestVersion(updatePackageName, currentVersion)
+			: null;
 		const kanbanInstallCommand = includeKanban
 			? resolveKanbanInstallCommand(
 					process.env,
@@ -484,7 +511,7 @@ export async function checkForUpdates(
 		if (options.verbose) {
 			writeln(`${c.dim}Current version: ${currentVersion}${c.reset}`);
 			writeln(`${c.dim}Package manager: ${packageManager}${c.reset}`);
-			writeln(`${c.dim}Package name:    ${packageName}${c.reset}`);
+			writeln(`${c.dim}Package name:    ${updatePackageName ?? "(self-updates disabled)"}${c.reset}`);
 			if (latestVersion) {
 				writeln(`${c.dim}Latest version:  ${latestVersion}${c.reset}`);
 			}
@@ -504,6 +531,9 @@ export async function checkForUpdates(
 		}
 
 		if (!latestVersion && !shouldUpdateKanban) {
+			if (!updatePackageName) {
+				return 0;
+			}
 			writeErr("Failed to check for updates: could not fetch latest version");
 			return 1;
 		}
