@@ -333,6 +333,23 @@ describe("default fetch_web_content tool", () => {
 			},
 		]);
 	});
+	it("accepts an empty serialized request array as an empty batch", async () => {
+		const execute = vi.fn(async () => "unused");
+		const tool = createWebFetchTool(execute);
+
+		await expect(
+			tool.execute(
+				{ requests: "[]" } as never,
+				{
+					agentId: "agent-1",
+					conversationId: "conv-1",
+					iteration: 1,
+				},
+			),
+		).resolves.toEqual([]);
+		expect(execute).not.toHaveBeenCalled();
+	});
+
 });
 
 describe("default submit_and_exit tool", () => {

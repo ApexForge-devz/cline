@@ -200,6 +200,11 @@ function parseSerializedArrayInput(
 	// confuse a shell test such as [ "value" ] with a serialized one-item
 	// array when there is no field schema to disambiguate it.
 	const inner = trimmed.slice(1, -1).trimStart();
+	if (inner.length === 0) {
+		// An empty list is unambiguous when parsing a schema-declared array
+		// field, but a bare "[]" may also be a shell test command.
+		return allowSingleElementArray ? [] : undefined;
+	}
 	const firstEntry = inner[0];
 	if (firstEntry !== '"' && firstEntry !== "'" && firstEntry !== "{") {
 		return undefined;
