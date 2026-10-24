@@ -4,10 +4,12 @@ on:
     push:
         branches:
             - main
+            - my-local-changes
     workflow_dispatch:
     pull_request:
         branches:
             - main
+            - my-local-changes
     workflow_call:
 
 # Set default permissions for all jobs
