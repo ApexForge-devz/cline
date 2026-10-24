@@ -349,7 +349,7 @@ describe("formatCommandForTerminal", () => {
 	})
 
 	it.skipIf(process.platform !== "win32")("round-trips structured arguments through cmd.exe", () => {
-		const args = ["hello world", "it's ok", "", 'embedded"quote', "trailing\\", "a&b", "paren(value)"]
+		const args = ["hello world", "it's ok", "", "trailing\\", "a&b", "paren(value)"]
 		const script = "process.stdout.write(JSON.stringify(process.argv.slice(1)))"
 		const command = formatCommandForTerminal(
 			{ command: process.execPath, args: ["-e", script, ...args] },
@@ -364,7 +364,7 @@ describe("formatCommandForTerminal", () => {
 	})
 
 	it.skipIf(process.platform !== "win32")("round-trips structured arguments through Windows PowerShell", () => {
-		const args = ["hello world", "it's ok", "", 'embedded"quote', "trailing\\", "a&b", "paren(value)"]
+		const args = ["hello world", "it's ok", "", 'embedded"quote with spaces', "trailing\\", "a&b", "paren(value)"]
 		const script = "process.stdout.write(JSON.stringify(process.argv.slice(1)))"
 		const command = formatCommandForTerminal(
 			{ command: process.execPath, args: ["-e", script, ...args] },
@@ -379,10 +379,10 @@ describe("formatCommandForTerminal", () => {
 		expect(JSON.parse(output.trim())).toEqual(args)
 	})
 
-	it("doubles backslashes before embedded quotes and at the end of cmd.exe args", () => {
-		const arg = "folder" + "\\" + '"' + "name" + "\\";
+	it("doubles trailing backslashes in quoted cmd.exe arguments", () => {
+		const arg = "folder with space" + "\\";
 		expect(formatCommandForTerminal({ command: "tool.exe", args: [arg] }, "cmd.exe")).toBe(
-			'tool.exe "folder' + "\\".repeat(3) + '"name' + "\\".repeat(2) + '"',
+			'tool.exe "folder with space' + "\\".repeat(2) + '"',
 		)
 	})
 
@@ -392,8 +392,10 @@ describe("formatCommandForTerminal", () => {
 		)
 	})
 
-	it("escapes embedded quotes when formatting cmd.exe arguments", () => {
-		expect(formatCommandForTerminal({ command: "tool.exe", args: ['a"b'] }, "cmd.exe")).toBe('tool.exe "a\\"b"')
+	it("rejects cmd.exe arguments containing literal double quotes", () => {
+		expect(() => formatCommandForTerminal({ command: "tool.exe", args: ['a"b'] }, "cmd.exe")).toThrow(
+			/cmd\.exe cannot safely preserve literal double quotes/,
+		)
 	})
 
 	it("quotes multiple structured args that need shell escaping", () => {

@@ -103,6 +103,14 @@ function quoteCmdArg(arg: string): string {
 			"cmd.exe may expand %NAME% or !NAME! even inside quotes; use PowerShell or WSL to pass these values literally.",
 		)
 	}
+	// cmd.exe interprets quote state before the target process applies Windows
+	// argv parsing. CRT-style \\" escaping alone can unbalance cmd's quoting,
+	// merge later arguments, or expose metacharacters as shell operators.
+	if (arg.includes('"')) {
+		throw new Error(
+			'cmd.exe cannot safely preserve literal double quotes in structured arguments; use PowerShell or WSL for arguments containing quotes.',
+		)
+	}
 	const needsQuotes = [...arg].some((character) => !/[A-Za-z0-9_./:@+=,-]/.test(character))
 	if (!needsQuotes) return arg
 	// Quote according to the Windows argv rules: backslashes before embedded
