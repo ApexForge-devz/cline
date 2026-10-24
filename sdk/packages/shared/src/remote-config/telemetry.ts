@@ -6,10 +6,18 @@ import type {
 } from "./bundle";
 import type { RemoteConfig } from "./schema";
 
+/** Remote-controlled telemetry is disabled in this fork unless explicitly opted in. */
+export const REMOTE_TELEMETRY_OPT_IN_ENV = "CLINE_ALLOW_REMOTE_TELEMETRY";
+
+function isRemoteTelemetryOptedIn(): boolean {
+	return typeof process !== "undefined" &&
+		process.env?.[REMOTE_TELEMETRY_OPT_IN_ENV] === "1";
+}
+
 export function resolveOpenTelemetryConfigFromRemoteConfig(
 	remoteConfig: RemoteConfig | undefined,
 ): Partial<OpenTelemetryClientConfig> | undefined {
-	if (!remoteConfig) {
+	if (!isRemoteTelemetryOptedIn() || !remoteConfig) {
 		return undefined;
 	}
 	return {
@@ -80,7 +88,7 @@ function readStringRecord(
 export function normalizeBundleTelemetry(
 	telemetry: Record<string, unknown> | undefined,
 ): Partial<OpenTelemetryClientConfig> | undefined {
-	if (!isRecord(telemetry)) {
+	if (!isRemoteTelemetryOptedIn() || !isRecord(telemetry)) {
 		return undefined;
 	}
 	const normalized: Partial<OpenTelemetryClientConfig> = {
@@ -116,6 +124,9 @@ export class DefaultRemoteConfigTelemetryAdapter
 		bundle: RemoteConfigBundle,
 		_context: RemoteConfigSyncContext,
 	): Partial<OpenTelemetryClientConfig> | undefined {
+		if (!isRemoteTelemetryOptedIn()) {
+			return undefined;
+		}
 		return {
 			...resolveOpenTelemetryConfigFromRemoteConfig(bundle.remoteConfig),
 			...normalizeBundleTelemetry(bundle.telemetry),
