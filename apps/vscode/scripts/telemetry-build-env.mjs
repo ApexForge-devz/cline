@@ -2,9 +2,7 @@ const SENSITIVE_ENV_VARS = [
 	"TELEMETRY_SERVICE_API_KEY",
 	"ERROR_SERVICE_API_KEY",
 	"OTEL_EXPORTER_OTLP_HEADERS",
-] as const
-
-type BuildEnv = Record<string, string | undefined>
+];
 
 /**
  * Create build-time definitions for sensitive telemetry configuration.
@@ -13,23 +11,20 @@ type BuildEnv = Record<string, string | undefined>
  * default and are always rejected in CI. PostHog keys also require an explicit
  * collector host; this fork must not silently send events to data.cline.bot.
  */
-export function telemetrySecretDefineValues(
-	env: BuildEnv = process.env,
-	warn: (message: string) => void = console.warn,
-): Record<string, string> {
-	const configuredSecrets = SENSITIVE_ENV_VARS.filter((name) => Boolean(env[name]?.trim()))
+export function telemetrySecretDefineValues(env = process.env, warn = console.warn) {
+	const configuredSecrets = SENSITIVE_ENV_VARS.filter((name) => Boolean(env[name]?.trim()));
 	const postHogSecrets = ["TELEMETRY_SERVICE_API_KEY", "ERROR_SERVICE_API_KEY"].filter(
 		(name) => Boolean(env[name]?.trim()),
-	)
-	const allowEmbeddedSecrets = env.CLINE_ALLOW_EMBEDDED_TELEMETRY_SECRETS === "1"
-	const isCiBuild = Boolean(env.CI) || env.GITHUB_ACTIONS === "true"
+	);
+	const allowEmbeddedSecrets = env.CLINE_ALLOW_EMBEDDED_TELEMETRY_SECRETS === "1";
+	const isCiBuild = Boolean(env.CI) || env.GITHUB_ACTIONS === "true";
 
 	if (configuredSecrets.length > 0 && isCiBuild) {
 		throw new Error(
 			"Refusing to embed telemetry credentials in CI (" +
 				configuredSecrets.join(", ") +
 				" is set). Remove these values from the build environment.",
-		)
+		);
 	}
 
 	if (configuredSecrets.length > 0 && !allowEmbeddedSecrets) {
@@ -37,13 +32,13 @@ export function telemetrySecretDefineValues(
 			"Refusing to embed telemetry credentials in a compiled VS Code extension: " +
 				configuredSecrets.join(", ") +
 				" is set. Use a trusted runtime service or set CLINE_ALLOW_EMBEDDED_TELEMETRY_SECRETS=1 for a private local build only.",
-		)
+		);
 	}
 
 	if (postHogSecrets.length > 0 && !env.CLINE_TELEMETRY_HOST?.trim()) {
 		throw new Error(
 			"PostHog credentials require an explicit CLINE_TELEMETRY_HOST; the fork will not default to the original project's telemetry collector.",
-		)
+		);
 	}
 
 	if (
@@ -52,7 +47,7 @@ export function telemetrySecretDefineValues(
 	) {
 		throw new Error(
 			"OTEL_EXPORTER_OTLP_HEADERS requires an explicit OTEL_EXPORTER_OTLP_ENDPOINT before credentials can be embedded.",
-		)
+		);
 	}
 
 	if (configuredSecrets.length > 0 && allowEmbeddedSecrets) {
@@ -60,7 +55,7 @@ export function telemetrySecretDefineValues(
 			"WARNING: embedding telemetry credentials in a compiled VS Code extension (" +
 				configuredSecrets.join(", ") +
 				"). Anyone with the extension bundle may be able to extract them.",
-		)
+		);
 	}
 
 	return {
@@ -77,5 +72,5 @@ export function telemetrySecretDefineValues(
 			allowEmbeddedSecrets ? env.ENABLE_ERROR_AUTOCAPTURE ?? "" : "",
 		),
 		"process.env.CLINE_TELEMETRY_HOST": JSON.stringify(env.CLINE_TELEMETRY_HOST ?? ""),
-	}
+	};
 }
