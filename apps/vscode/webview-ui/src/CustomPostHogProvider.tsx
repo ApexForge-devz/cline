@@ -1,3 +1,4 @@
+import { isClineCloudServicesEnabled } from "@cline/shared"
 import { hasExplicitPostHogHost, posthogConfig } from "@shared/services/config/posthog-config"
 import posthog from "posthog-js"
 import { PostHogProvider } from "posthog-js/react"
@@ -8,7 +9,7 @@ export function CustomPostHogProvider({ children }: { children: ReactNode }) {
 	const { distinctId, version, userInfo, environment, telemetrySetting } = useExtensionState()
 
 	// Skip PostHog entirely in self-hosted mode or when environment is unknown (safety fallback)
-	const isSelfHostedOrUnknown = !environment || environment === "selfHosted"
+	const isSelfHostedOrUnknown = !isClineCloudServicesEnabled() || !environment || environment === "selfHosted"
 
 	const isTelemetryEnabled = telemetrySetting !== "disabled"
 	const [isActive, setIsActive] = useState(false)

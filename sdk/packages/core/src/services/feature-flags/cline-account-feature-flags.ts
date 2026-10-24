@@ -1,4 +1,4 @@
-import type { FeatureFlag, FeatureFlagsContext } from "@cline/shared";
+import { isClineCloudServicesEnabled, type FeatureFlag, type FeatureFlagsContext } from "@cline/shared";
 import { ProviderSettingsManager } from "../storage/provider-settings-manager";
 import { FeatureFlagsService } from "./FeatureFlagsService";
 
@@ -28,6 +28,10 @@ function getAccountId(): string | undefined {
 export async function isClineAccountFeatureEnabled(
 	flag: FeatureFlag,
 ): Promise<boolean> {
+	if (!isClineCloudServicesEnabled()) {
+		current = undefined;
+		return false;
+	}
 	const accountId = getAccountId();
 	const apiKey = process.env.TELEMETRY_SERVICE_API_KEY;
 	if (!accountId || !apiKey) {

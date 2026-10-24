@@ -1,4 +1,5 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios"
+import { isClineCloudServicesEnabled } from "@cline/shared"
 import { Controller } from "@/core/controller"
 import { CLINE_PASS_PROVIDER_ID } from "@/core/controller/models/handleClinePassProviderSelection"
 import { ClineAccountService } from "@/services/account/ClineAccountService"
@@ -292,6 +293,12 @@ async function ensureUserInOrgWithRemoteConfig(controller: Controller): Promise<
  * @param controller The controller instance
  */
 export async function fetchRemoteConfig(controller: Controller) {
+	if (!isClineCloudServicesEnabled()) {
+		// Do not retain settings previously fetched from an organization account.
+		await clearRemoteConfig()
+		await controller.postStateToWebview()
+		return
+	}
 	try {
 		await ensureUserInOrgWithRemoteConfig(controller)
 	} catch (error) {

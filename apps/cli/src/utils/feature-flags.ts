@@ -12,6 +12,7 @@ import {
 	buildClinePostHogClient,
 	PostHogFeatureFlagsProvider,
 } from "@cline/core/services/feature-flags/posthog";
+import { isClineCloudServicesEnabled } from "@cline/shared";
 import { resolveClineDataDir } from "@cline/shared/storage";
 
 let cliFeatureFlagsContext: FeatureFlagsContext = { clientName: "cline-cli" };
@@ -45,6 +46,7 @@ export function getCliFeatureFlagsService(options?: {
 	if (!cliFeatureFlagsService) {
 		const apiKey = process.env.TELEMETRY_SERVICE_API_KEY;
 		const provider =
+			isClineCloudServicesEnabled() &&
 			apiKey &&
 			process.env.IS_TEST !== "true" &&
 			process.env.E2E_TEST !== "true"

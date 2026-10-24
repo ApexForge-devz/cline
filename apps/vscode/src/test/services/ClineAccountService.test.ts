@@ -4,12 +4,20 @@ import sinon from "sinon"
 import { ClineAccountService } from "@/services/account/ClineAccountService"
 import { AuthService } from "@/services/auth/AuthService"
 
+const ORIGINAL_CLOUD_SERVICES = process.env.CLINE_ENABLE_CLOUD_SERVICES
+function enableCloudServicesForTest() { process.env.CLINE_ENABLE_CLOUD_SERVICES = "1" }
+function restoreCloudServicesAfterTest() {
+	if (ORIGINAL_CLOUD_SERVICES === undefined) delete process.env.CLINE_ENABLE_CLOUD_SERVICES
+	else process.env.CLINE_ENABLE_CLOUD_SERVICES = ORIGINAL_CLOUD_SERVICES
+}
+
 describe("ClineAccountService.fetchUserRemoteConfig", () => {
 	let service: ClineAccountService
 	let sandbox: sinon.SinonSandbox
 	let authStub: { getAuthToken: sinon.SinonStub }
 
 	beforeEach(() => {
+		enableCloudServicesForTest()
 		sandbox = sinon.createSandbox()
 		authStub = { getAuthToken: sandbox.stub().resolves("token") }
 		sandbox.stub(AuthService, "getInstance").returns(authStub as unknown as AuthService)
@@ -18,6 +26,7 @@ describe("ClineAccountService.fetchUserRemoteConfig", () => {
 
 	afterEach(() => {
 		sandbox.restore()
+		restoreCloudServicesAfterTest()
 	})
 
 	it("returns discovery response on a successful authenticated request", async () => {
@@ -86,6 +95,7 @@ describe("ClineAccountService.fetchFeaturebaseToken", () => {
 	let sandbox: sinon.SinonSandbox
 
 	beforeEach(() => {
+		enableCloudServicesForTest()
 		sandbox = sinon.createSandbox()
 		sandbox.stub(AuthService, "getInstance").returns({} as AuthService)
 		service = new ClineAccountService()
@@ -93,6 +103,7 @@ describe("ClineAccountService.fetchFeaturebaseToken", () => {
 
 	afterEach(() => {
 		sandbox.restore()
+		restoreCloudServicesAfterTest()
 	})
 
 	it("returns featurebaseJwt on a successful authenticated request", async () => {

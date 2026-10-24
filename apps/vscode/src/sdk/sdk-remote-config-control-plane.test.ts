@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import discoveryFixture from "@/core/storage/remote-config/fixtures/user-remote-config-discovery.json"
 
 const {
@@ -49,6 +49,7 @@ import { SdkRemoteConfigControlPlane } from "@/core/storage/remote-config/sdk-co
 
 describe("SdkRemoteConfigControlPlane", () => {
 	beforeEach(() => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1");
 		fetchUserRemoteConfig.mockReset()
 		switchAccount.mockReset()
 		setSecret.mockReset()
@@ -58,6 +59,10 @@ describe("SdkRemoteConfigControlPlane", () => {
 		activeOrganization.id = "org-current"
 		lastManagedOrganization.id = undefined
 		axiosRequest.mockReset().mockRejectedValue(new Error("offline"))
+	})
+
+	afterEach(() => {
+		vi.unstubAllEnvs()
 	})
 
 	const lastManagedOrganization = { id: undefined as string | undefined }
@@ -72,6 +77,17 @@ describe("SdkRemoteConfigControlPlane", () => {
 			},
 		})
 	}
+
+	it("blocks discovery entirely when Cline cloud services are disabled", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0")
+		const controlPlane = makeControlPlane()
+		const bundle = await controlPlane.fetchBundle({ workspacePath: "/workspace" })
+		expect(bundle).toBeUndefined()
+		expect(controlPlane.wasExplicitNoConfig()).toBe(true)
+		expect(controlPlane.isRemoteConfigAvailable()).toBe(false)
+		expect(fetchUserRemoteConfig).not.toHaveBeenCalled()
+		expect(axiosRequest).not.toHaveBeenCalled()
+	})
 
 	it("adapts the discovery API contract without dropping rules, workflows, skills, or policy fields", async () => {
 		activeOrganization.id = null

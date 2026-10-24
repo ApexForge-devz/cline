@@ -10,7 +10,7 @@
 
 import path from "node:path"
 import { getValidClineCredentials, type ITelemetryService, type OAuthCredentials } from "@cline/core"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AuthService, type ClineAuthInfo, LogoutReason } from "./auth-service"
 
 // ---------------------------------------------------------------------------
@@ -235,10 +235,13 @@ async function waitForCondition(condition: () => boolean): Promise<void> {
 // Tests
 // ---------------------------------------------------------------------------
 
+const ORIGINAL_CLOUD_SERVICES = process.env.CLINE_ENABLE_CLOUD_SERVICES
+
 describe("AuthService", () => {
 	let authService: AuthService
 
 	beforeEach(() => {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = "1"
 		// Reset the singleton between tests
 		resetSingleton()
 		authService = AuthService.getInstance(undefined, mockSdkTelemetry)
@@ -247,6 +250,11 @@ describe("AuthService", () => {
 		mockProviderSettings.clear()
 		mockLastUsedProvider = undefined
 		vi.clearAllMocks()
+	})
+
+	afterEach(() => {
+		if (ORIGINAL_CLOUD_SERVICES === undefined) delete process.env.CLINE_ENABLE_CLOUD_SERVICES
+		else process.env.CLINE_ENABLE_CLOUD_SERVICES = ORIGINAL_CLOUD_SERVICES
 	})
 
 	describe("singleton pattern", () => {

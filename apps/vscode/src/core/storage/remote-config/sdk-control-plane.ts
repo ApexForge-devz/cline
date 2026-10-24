@@ -1,3 +1,4 @@
+import { isClineCloudServicesEnabled } from "@cline/shared"
 import type { RemoteConfigBundle, RemoteConfigManagedInstructionFile } from "@cline/shared"
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios"
 import { ClineEnv } from "@/config"
@@ -174,6 +175,13 @@ export class SdkRemoteConfigControlPlane {
 		this.lastConfiguredKeys = {}
 		this.lastRemoteConfig = undefined
 		this.remoteConfigAvailable = false
+
+		// Local-first builds never discover or apply organization-managed config.
+		// Returning explicit no-config lets refresh clear cached/materialized policy.
+		if (!isClineCloudServicesEnabled()) {
+			this.explicitNoConfig = true
+			return undefined
+		}
 
 		const discovered = await this.discoverRemoteConfigOrg()
 		if (!discovered) {

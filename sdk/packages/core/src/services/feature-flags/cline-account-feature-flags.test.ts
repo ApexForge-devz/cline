@@ -29,6 +29,7 @@ const flag = FeatureFlag.CLINE_COMPOSIO_BETA;
 beforeEach(async () => {
 	vi.clearAllMocks();
 	vi.stubEnv("TELEMETRY_SERVICE_API_KEY", "test-key");
+	vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1");
 	mocks.accountId = undefined;
 	await isClineAccountFeatureEnabled(flag); // clear the previous identity
 	mocks.accountId = "account-1";
