@@ -30,6 +30,27 @@ const { values } = parseArgs({
 
 const dryRun = values["dry-run"] ?? false;
 const npmTag = values.tag ?? "latest";
+
+// This release script still targets the upstream npm names (cline and @cline/*).
+// Don't allow a fork build to publish to those namespaces by accident. --dry-run
+// remains available while the fork's package namespace is being renamed. The
+// override is intentionally explicit and should only be used when publishing
+// to the upstream names is genuinely intended.
+if (
+	!dryRun &&
+	process.env.CLINE_ALLOW_UPSTREAM_PACKAGE_PUBLISH !== "1"
+) {
+	console.error(
+		[
+			"Publishing is blocked by default in this fork.",
+			"This script still publishes the upstream npm package names cline and @cline/*.",
+			"Rename the fork's package namespace and dependencies before publishing a fork release.",
+			"CLINE_ALLOW_UPSTREAM_PACKAGE_PUBLISH=1 explicitly bypasses this safeguard.",
+		].join("\n"),
+	);
+	process.exit(1);
+}
+
 const wrapperPackageName = "cline";
 
 const expectedPlatformPackages = [
