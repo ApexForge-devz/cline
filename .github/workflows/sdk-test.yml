@@ -4,6 +4,7 @@ on:
     push:
         branches:
             - main
+            - my-local-changes
         paths:
             - "sdk/**"
             - "apps/examples/desktop-app/**"
