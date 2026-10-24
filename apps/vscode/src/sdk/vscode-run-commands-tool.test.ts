@@ -1,4 +1,5 @@
 import { CommandExitError } from "@cline/core"
+import { execFileSync } from "child_process"
 import { EventEmitter } from "events"
 import * as fs from "fs"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -345,6 +346,36 @@ describe("formatCommandForTerminal", () => {
 		expect(formatCommandForTerminal({ command: "echo", args: ["it's ok", "hello world"] }, "C:\\Windows\\System32\\cmd.exe")).toBe(
 			'echo "it\'s ok" "hello world"',
 		)
+	})
+
+	it.skipIf(process.platform !== "win32")("round-trips structured arguments through cmd.exe", () => {
+		const args = ["hello world", "it's ok", "", 'embedded"quote', "trailing\\", "a&b", "paren(value)"]
+		const script = "process.stdout.write(JSON.stringify(process.argv.slice(1)))"
+		const command = formatCommandForTerminal(
+			{ command: process.execPath, args: ["-e", script, ...args] },
+			"C:\\Windows\\System32\\cmd.exe",
+		)
+		const output = execFileSync("cmd.exe", ["/d", "/c", command], {
+			encoding: "utf8",
+			windowsHide: true,
+		})
+		expect(JSON.parse(output.trim())).toEqual(args)
+	})
+
+	it.skipIf(process.platform !== "win32")("round-trips structured arguments through Windows PowerShell", () => {
+		const args = ["hello world", "it's ok", "", 'embedded"quote', "trailing\\", "a&b", "paren(value)"]
+		const script = "process.stdout.write(JSON.stringify(process.argv.slice(1)))"
+		const command = formatCommandForTerminal(
+			{ command: process.execPath, args: ["-e", script, ...args] },
+			"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+		)
+		const output = execFileSync("powershell.exe", [
+			"-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command,
+		], {
+			encoding: "utf8",
+			windowsHide: true,
+		})
+		expect(JSON.parse(output.trim())).toEqual(args)
 	})
 
 	it("doubles backslashes before embedded quotes and at the end of cmd.exe args", () => {
