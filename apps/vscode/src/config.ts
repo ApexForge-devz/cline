@@ -1,6 +1,7 @@
 import * as fs from "fs/promises"
 import * as os from "os"
 import * as path from "path"
+import { isClineCloudServicesEnabled } from "@cline/shared"
 import { Environment, type EnvironmentConfig } from "./shared/config-types"
 import { Logger } from "./shared/services/Logger"
 
@@ -33,13 +34,15 @@ class ClineEndpoint {
 
 	// On-premise config loaded from file (null if not on-premise)
 	private onPremiseConfig: EndpointsFileSchema | null = null
-	private environment: Environment = Environment.production
+	private environment: Environment = isClineCloudServicesEnabled() ? Environment.production : Environment.local
 	// Track if config came from bundled file (enterprise distribution)
 	private isBundled = false
 
 	private constructor() {
 		// Set environment at module load. Use override if provided.
-		const _env = process?.env?.CLINE_ENVIRONMENT_OVERRIDE || process?.env?.CLINE_ENVIRONMENT
+		const _env = isClineCloudServicesEnabled()
+			? process?.env?.CLINE_ENVIRONMENT_OVERRIDE || process?.env?.CLINE_ENVIRONMENT
+			: undefined
 		if (_env && Object.values(Environment).includes(_env as Environment)) {
 			this.environment = _env as Environment
 		}
@@ -62,7 +65,9 @@ class ClineEndpoint {
 		ClineEndpoint._instance = new ClineEndpoint()
 
 		// Try to load on-premise config from file
-		const endpointsConfig = await ClineEndpoint.loadEndpointsFile()
+		const endpointsConfig = isClineCloudServicesEnabled()
+			? await ClineEndpoint.loadEndpointsFile()
+			: null
 		if (endpointsConfig) {
 			ClineEndpoint._instance.onPremiseConfig = endpointsConfig
 			Logger.log("Cline running in self-hosted mode with custom endpoints")
@@ -88,7 +93,7 @@ class ClineEndpoint {
 		if (!ClineEndpoint._initialized) {
 			return true
 		}
-		return ClineEndpoint.config.environment === Environment.selfHosted
+		return !isClineCloudServicesEnabled() || ClineEndpoint.config.environment === Environment.selfHosted
 	}
 
 	/**
@@ -272,6 +277,10 @@ class ClineEndpoint {
 	 * @throws Error if in on-premise mode (environment switching is disabled)
 	 */
 	public setEnvironment(env: string) {
+		if (!isClineCloudServicesEnabled()) {
+			this.environment = Environment.local
+			return
+		}
 		if (this.onPremiseConfig) {
 			throw new Error("Cannot change environment in on-premise mode. Endpoints are configured via ~/.cline/endpoints.json")
 		}

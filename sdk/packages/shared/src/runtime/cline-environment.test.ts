@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	CLINE_CLOUD_SERVICES_ENABLED_ENV,
 	CLINE_ENVIRONMENT_ENV,
 	CLINE_ENVIRONMENT_OVERRIDE_ENV,
 	CLINE_ENVIRONMENTS,
@@ -11,6 +12,7 @@ import {
 const ENV_KEYS = [
 	CLINE_ENVIRONMENT_ENV,
 	CLINE_ENVIRONMENT_OVERRIDE_ENV,
+	CLINE_CLOUD_SERVICES_ENABLED_ENV,
 	"CLINE_API_BASE_URL",
 ] as const;
 
@@ -38,11 +40,20 @@ afterEach(() => {
 });
 
 describe("resolveClineEnvironment", () => {
-	it("defaults to production when no env var is set", () => {
-		expect(resolveClineEnvironment()).toBe(DEFAULT_CLINE_ENVIRONMENT);
+	it("defaults to local and never selects a cloud environment without opt-in", () => {
+		expect(DEFAULT_CLINE_ENVIRONMENT).toBe("local");
+		expect(resolveClineEnvironment()).toBe("local");
+		process.env[CLINE_ENVIRONMENT_ENV] = "production";
+		expect(resolveClineEnvironment()).toBe("local");
 	});
 
-	it("reads CLINE_ENVIRONMENT from process.env", () => {
+	it("allows cloud environments only with explicit opt-in", () => {
+		process.env[CLINE_CLOUD_SERVICES_ENABLED_ENV] = "1";
+		expect(resolveClineEnvironment()).toBe("production");
+	});
+
+	it("reads CLINE_ENVIRONMENT from process.env when cloud services are enabled", () => {
+		process.env[CLINE_CLOUD_SERVICES_ENABLED_ENV] = "1";
 		process.env[CLINE_ENVIRONMENT_ENV] = "staging";
 		expect(resolveClineEnvironment()).toBe("staging");
 
@@ -50,7 +61,8 @@ describe("resolveClineEnvironment", () => {
 		expect(resolveClineEnvironment()).toBe("local");
 	});
 
-	it("prefers CLINE_ENVIRONMENT_OVERRIDE over CLINE_ENVIRONMENT", () => {
+	it("prefers CLINE_ENVIRONMENT_OVERRIDE over CLINE_ENVIRONMENT when enabled", () => {
+		process.env[CLINE_CLOUD_SERVICES_ENABLED_ENV] = "1";
 		process.env[CLINE_ENVIRONMENT_OVERRIDE_ENV] = "local";
 		process.env[CLINE_ENVIRONMENT_ENV] = "staging";
 
@@ -58,12 +70,14 @@ describe("resolveClineEnvironment", () => {
 	});
 
 	it("normalizes case and surrounding whitespace", () => {
+		process.env[CLINE_CLOUD_SERVICES_ENABLED_ENV] = "1";
 		process.env[CLINE_ENVIRONMENT_ENV] = "  STAGING  ";
 
 		expect(resolveClineEnvironment()).toBe("staging");
 	});
 
 	it("ignores unknown values and falls through to the next source", () => {
+		process.env[CLINE_CLOUD_SERVICES_ENABLED_ENV] = "1";
 		process.env[CLINE_ENVIRONMENT_OVERRIDE_ENV] = "qa";
 		process.env[CLINE_ENVIRONMENT_ENV] = "staging";
 		expect(resolveClineEnvironment()).toBe("staging");
@@ -73,15 +87,16 @@ describe("resolveClineEnvironment", () => {
 		expect(resolveClineEnvironment()).toBe(DEFAULT_CLINE_ENVIRONMENT);
 	});
 
-	it("defaults to production when process is unavailable", () => {
+	it("defaults to local when process is unavailable", () => {
 		vi.stubGlobal("process", undefined);
 
-		expect(resolveClineEnvironment()).toBe(DEFAULT_CLINE_ENVIRONMENT);
+		expect(resolveClineEnvironment()).toBe("local");
 	});
 });
 
 describe("getClineEnvironmentConfig", () => {
-	it("returns the config for an explicit environment", () => {
+	it("returns the config for an explicit environment when cloud services are enabled", () => {
+		process.env[CLINE_CLOUD_SERVICES_ENABLED_ENV] = "1";
 		expect(getClineEnvironmentConfig("staging")).toBe(
 			CLINE_ENVIRONMENTS.staging,
 		);
@@ -91,17 +106,19 @@ describe("getClineEnvironmentConfig", () => {
 		);
 	});
 
-	it("falls back to production by default", () => {
-		expect(getClineEnvironmentConfig()).toBe(CLINE_ENVIRONMENTS.production);
+	it("falls back to local by default", () => {
+		expect(getClineEnvironmentConfig()).toBe(CLINE_ENVIRONMENTS.local);
 	});
 
-	it("uses the resolved process.env environment when no explicit environment is provided", () => {
+	it("uses the resolved process.env environment when cloud services are enabled", () => {
+		process.env[CLINE_CLOUD_SERVICES_ENABLED_ENV] = "1";
 		process.env[CLINE_ENVIRONMENT_ENV] = "staging";
 
 		expect(getClineEnvironmentConfig()).toBe(CLINE_ENVIRONMENTS.staging);
 	});
 
-	it("applies CLINE_API_BASE_URL without mutating the catalog config", () => {
+	it("applies CLINE_API_BASE_URL only when cloud services are explicitly enabled", () => {
+		process.env[CLINE_CLOUD_SERVICES_ENABLED_ENV] = "1";
 		process.env.CLINE_API_BASE_URL = "http://127.0.0.1:3000";
 
 		expect(getClineEnvironmentConfig("local")).toEqual({
@@ -112,10 +129,10 @@ describe("getClineEnvironmentConfig", () => {
 		expect(CLINE_ENVIRONMENTS.local.apiBaseUrl).toBe("http://localhost:7777");
 	});
 
-	it("defaults to production when process is unavailable", () => {
+	it("defaults to local when process is unavailable", () => {
 		vi.stubGlobal("process", undefined);
 
-		expect(getClineEnvironmentConfig()).toBe(CLINE_ENVIRONMENTS.production);
+		expect(getClineEnvironmentConfig()).toBe(CLINE_ENVIRONMENTS.local);
 	});
 });
 

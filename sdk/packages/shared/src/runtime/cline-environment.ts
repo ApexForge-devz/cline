@@ -1,5 +1,6 @@
 export const CLINE_ENVIRONMENT_ENV = "CLINE_ENVIRONMENT";
 export const CLINE_ENVIRONMENT_OVERRIDE_ENV = "CLINE_ENVIRONMENT_OVERRIDE";
+export const CLINE_CLOUD_SERVICES_ENABLED_ENV = "CLINE_ENABLE_CLOUD_SERVICES";
 
 export type ClineEnvironment = "production" | "staging" | "local";
 
@@ -37,7 +38,8 @@ export const CLINE_ENVIRONMENTS: Readonly<
 	},
 };
 
-export const DEFAULT_CLINE_ENVIRONMENT: ClineEnvironment = "production";
+/** Safe default: upstream Cline-hosted services are disabled unless explicitly enabled. */
+export const DEFAULT_CLINE_ENVIRONMENT: ClineEnvironment = "local";
 
 export interface ResolveClineEnvironmentOptions {
 	env?: Partial<NodeJS.ProcessEnv>;
@@ -67,12 +69,23 @@ function readProcessEnv(): NodeJS.ProcessEnv {
 	return process.env;
 }
 
+export function isClineCloudServicesEnabled(
+	env: Partial<NodeJS.ProcessEnv> = readProcessEnv(),
+): boolean {
+	return env[CLINE_CLOUD_SERVICES_ENABLED_ENV] === "1";
+}
+
 export function resolveClineEnvironment(): ClineEnvironment {
 	const env = readProcessEnv();
+	// Local inference and user-configured provider APIs must not implicitly
+	// enable account, organization, or other Cline-hosted services.
+	if (!isClineCloudServicesEnabled(env)) {
+		return "local";
+	}
 	return (
 		normalizeClineEnvironment(env[CLINE_ENVIRONMENT_OVERRIDE_ENV]) ??
 		normalizeClineEnvironment(env[CLINE_ENVIRONMENT_ENV]) ??
-		DEFAULT_CLINE_ENVIRONMENT
+		"production"
 	);
 }
 
@@ -101,7 +114,11 @@ function applyConfigOverrides(
 export function getClineEnvironmentConfig(
 	env?: ClineEnvironment,
 ): ClineEnvironmentConfig {
+	const processEnv = readProcessEnv();
+	if (!isClineCloudServicesEnabled(processEnv)) {
+		return CLINE_ENVIRONMENTS.local;
+	}
 	const config = getEnvConfig(env);
 
-	return applyConfigOverrides(config, readProcessEnv());
+	return applyConfigOverrides(config, processEnv);
 }

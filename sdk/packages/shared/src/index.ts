@@ -510,11 +510,13 @@ export type {
 	ResolveClineEnvironmentOptions,
 } from "./runtime/cline-environment";
 export {
+	CLINE_CLOUD_SERVICES_ENABLED_ENV,
 	CLINE_ENVIRONMENT_ENV,
 	CLINE_ENVIRONMENT_OVERRIDE_ENV,
 	CLINE_ENVIRONMENTS,
 	DEFAULT_CLINE_ENVIRONMENT,
 	getClineEnvironmentConfig,
+	isClineCloudServicesEnabled,
 	resolveClineEnvironment,
 } from "./runtime/cline-environment";
 export type {
