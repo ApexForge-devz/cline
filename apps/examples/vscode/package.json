@@ -1,10 +1,10 @@
 {
 	"name": "@cline/vscode",
-	"displayName": "Cline Chat",
+	"displayName": "Cline ApexForge Chat",
 	"description": "Autonomous coding agent right in your IDE, capable of creating/editing files, running commands, using the browser, and more with your permission every step of the way. Backed by the Cline CLI runtime.",
 	"version": "0.0.0",
 	"private": true,
-	"publisher": "cline",
+	"publisher": "apexforge-devz",
 	"icon": "src/webview/public/icon.png",
 	"license": "Apache-2.0",
 	"engines": {
