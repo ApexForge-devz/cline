@@ -333,6 +333,7 @@ describe("default fetch_web_content tool", () => {
 			},
 		]);
 	});
+
 	it("accepts an empty serialized request array as an empty batch", async () => {
 		const execute = vi.fn(async () => "unused");
 		const tool = createWebFetchTool(execute);
@@ -349,7 +350,6 @@ describe("default fetch_web_content tool", () => {
 		).resolves.toEqual([]);
 		expect(execute).not.toHaveBeenCalled();
 	});
-
 });
 
 describe("default submit_and_exit tool", () => {

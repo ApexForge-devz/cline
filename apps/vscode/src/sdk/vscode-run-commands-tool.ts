@@ -113,18 +113,13 @@ function quoteCmdArg(arg: string): string {
 	}
 	const needsQuotes = [...arg].some((character) => !/[A-Za-z0-9_./:@+=,-]/.test(character))
 	if (!needsQuotes) return arg
-	// Quote according to the Windows argv rules: backslashes before embedded
-	// quotes and at the end of a quoted argument must be doubled.
+	// Double trailing backslashes so the Windows argv parser does not treat
+	// them as escaping the closing quote.
 	let escaped = '"'
 	let backslashes = 0
 	for (const character of arg) {
 		if (character === "\\") {
 			backslashes += 1
-			continue
-		}
-		if (character === '"' ) {
-			escaped += "\\".repeat(backslashes * 2 + 1) + '"'
-			backslashes = 0
 			continue
 		}
 		escaped += "\\".repeat(backslashes) + character
