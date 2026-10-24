@@ -50,7 +50,11 @@ const config = {
 }
 const mcpHub = { getMcpSettingsFilePath: async () => "/tmp/unused-mcp.json" }
 
+const remoteTelemetryOptInEnv = "CLINE_ALLOW_REMOTE_TELEMETRY"
+const previousRemoteTelemetryOptIn = process.env[remoteTelemetryOptInEnv]
+
 beforeEach(() => {
+	process.env[remoteTelemetryOptInEnv] = "1"
 	client.tracerProvider = {}
 	client.dispose.mockClear()
 	constructClient.mockClear()
@@ -58,9 +62,23 @@ beforeEach(() => {
 	removeProvider.mockImplementation(async () => {})
 	addProvider.mockClear()
 })
-afterEach(() => sinon.restore())
+afterEach(() => {
+	sinon.restore()
+	if (previousRemoteTelemetryOptIn === undefined) {
+		delete process.env[remoteTelemetryOptInEnv]
+	} else {
+		process.env[remoteTelemetryOptInEnv] = previousRemoteTelemetryOptIn
+	}
+})
 
 describe("remote config telemetry ownership", () => {
+	it("does not create a remote telemetry provider without explicit opt-in", async () => {
+		delete process.env[remoteTelemetryOptInEnv]
+		await applyRemoteConfig(config, {}, mcpHub as never)
+		expect(constructClient).not.toHaveBeenCalled()
+		expect(addProvider).not.toHaveBeenCalled()
+	})
+
 	it("preserves the trace exporter through schema validation and state mapping", () => {
 		const transformed = transformRemoteConfigToStateShape(RemoteConfigSchema.parse(config))
 		expect(transformed.openTelemetryTracesExporter).toBe("otlp")

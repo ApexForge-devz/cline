@@ -9,7 +9,7 @@ import type { RemoteConfig } from "./schema";
 /** Remote-controlled telemetry is disabled in this fork unless explicitly opted in. */
 export const REMOTE_TELEMETRY_OPT_IN_ENV = "CLINE_ALLOW_REMOTE_TELEMETRY";
 
-function isRemoteTelemetryOptedIn(): boolean {
+export function isRemoteTelemetryOptedIn(): boolean {
 	return typeof process !== "undefined" &&
 		process.env?.[REMOTE_TELEMETRY_OPT_IN_ENV] === "1";
 }

@@ -1,6 +1,7 @@
 import { synchronizeRemoteRuleToggles } from "@core/context/instructions/user-instructions/rule-helpers"
 import { parseRemoteSkillEntries } from "@core/context/instructions/user-instructions/skills"
 import type { RemoteConfig, S3AccessKeySettings } from "@shared/remote-config/schema"
+import { isRemoteTelemetryOptedIn } from "@cline/shared"
 import { ConfiguredAPIKeys, GlobalStateAndSettings, RemoteConfigFields } from "@shared/storage/state-keys"
 import { AuthService } from "@/services/auth/AuthService"
 import { getDistinctId } from "@/services/logging/distinctId"
@@ -241,6 +242,11 @@ export function transformRemoteConfigToStateShape(remoteConfig: RemoteConfig): P
 
 export const REMOTE_CONFIG_OTEL_PROVIDER_ID = "OpenTelemetryRemoteConfiguredProvider"
 async function applyRemoteOTELConfig(transformed: Partial<RemoteConfigFields>, telemetryService: TelemetryService) {
+	// Keep the legacy host path aligned with the shared SDK's default-deny policy.
+	// Remote organization settings must not create an exporter without explicit opt-in.
+	if (!isRemoteTelemetryOptedIn()) {
+		return;
+	}
 	try {
 		const otelConfig = remoteConfigToOtelConfig(transformed)
 		if (isOpenTelemetryConfigValid(otelConfig)) {
