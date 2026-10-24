@@ -23,7 +23,7 @@
 <a href="https://github.com/ApexForge-devz/cline/issues" target="_blank">Feature Requests</a>
 </td>
 <td align="center">
-<a href="https://docs.cline.bot" target="_blank">Docs</a>
+<a href="https://github.com/ApexForge-devz/cline/tree/my-local-changes/docs" target="_blank">Docs source</a>
 </td>
 </tbody>
 </table>
