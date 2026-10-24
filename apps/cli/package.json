@@ -59,7 +59,7 @@
 		"dev": "CLINE_BUILD_ENV=development bun --conditions=development ./src/index.ts",
 		"typecheck": "tsc --noEmit",
 		"test": "bun run test:unit",
-		"test:unit": "vitest run --config vitest.config.ts && node --test script/hub-discovery-shield.test.mjs",
+		"test:unit": "vitest run --config vitest.config.ts && node --test script/hub-discovery-shield.test.mjs script/fork-package-metadata.test.mjs",
 		"test:e2e": "vitest run --config vitest.e2e.config.ts",
 		"test:e2e:interactive": "vitest run --config vitest.interactive.e2e.config.ts",
 		"test:e2e:tuistory": "vitest run --config vitest.tuistory.e2e.config.ts",
