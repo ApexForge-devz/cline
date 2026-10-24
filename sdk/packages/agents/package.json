@@ -31,6 +31,7 @@
 	],
 	"license": "Apache-2.0",
 	"scripts": {
+		"prepublishOnly": "bun ../../scripts/guard-direct-publish.ts",
 		"build": "bun run bun.mts && bun tsc -p tsconfig.build.json",
 		"dev": "bun build ./src/index.ts --outdir ./dist --target node --format esm --watch",
 		"typecheck": "bun tsc -p tsconfig.dev.json --noEmit",
