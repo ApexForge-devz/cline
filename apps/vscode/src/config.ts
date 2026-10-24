@@ -318,7 +318,7 @@ class ClineEndpoint {
 					environment: Environment.local,
 					appBaseUrl: "http://localhost:3000",
 					apiBaseUrl: "http://localhost:7777",
-					mcpBaseUrl: "https://api.cline.bot/v1/mcp",
+					mcpBaseUrl: "http://localhost:7777/v1/mcp",
 				}
 			default:
 				return {

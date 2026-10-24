@@ -464,6 +464,7 @@ describe("ClineEndpoint configuration", () => {
 
 			ClineEnv.setEnvironment("local")
 			ClineEnv.getEnvironment().environment.should.equal("local")
+			ClineEnv.getEnvironment().mcpBaseUrl.should.equal("http://localhost:7777/v1/mcp")
 
 			ClineEnv.setEnvironment("production")
 			ClineEnv.getEnvironment().environment.should.equal("production")
