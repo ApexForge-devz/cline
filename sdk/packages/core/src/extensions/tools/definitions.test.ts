@@ -902,6 +902,7 @@ describe("default run_commands tool", () => {
 		const malformedInputs = [
 			'[ "echo"; echo should-not-run ]',
 			{ commands: '[ "echo"; echo should-not-run ]' },
+			'[ ( "echo"; echo should-not-run ) ]',
 		];
 
 		for (const input of malformedInputs) {
