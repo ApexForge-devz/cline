@@ -144,17 +144,19 @@ function parseSerializedArrayInput(value: string, description: string): unknown[
 	const trimmed = value.trim();
 	if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return undefined;
 
+	// Require an unambiguous JSON-like opening token. In particular, do not
+	// reinterpret shell tests such as `[ "value" ]` as a one-element array.
+	const firstEntry = trimmed[1];
+	if (firstEntry !== '"' && firstEntry !== "'" && firstEntry !== "{") {
+		return undefined;
+	}
+
 	try {
 		const parsed: unknown = JSON.parse(trimmed);
 		return Array.isArray(parsed) ? parsed : undefined;
 	} catch {
-		// Continue only for a JSON-looking array; ordinary shell/regex bracket
-		// expressions remain plain strings.
-	}
-
-	const firstEntry = trimmed.slice(1).trimStart()[0];
-	if (firstEntry !== '"' && firstEntry !== "'" && firstEntry !== "{") {
-		return undefined;
+		// Continue to repair malformed JSON-style arrays such as Windows paths
+		// containing unescaped backslashes.
 	}
 
 	const repaired = parseJsonStream(trimmed);

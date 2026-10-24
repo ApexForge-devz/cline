@@ -743,6 +743,17 @@ describe("default run_commands tool", () => {
 		expect(execute).toHaveBeenNthCalledWith(4, String.raw`Get-ChildItem Assets\Packs`, process.cwd(), expect.anything());
 	});
 
+	it("preserves bracket-based shell test commands", async () => {
+		const execute = vi.fn(async (command: string) => `ran:${command}`);
+		const tool = createShellTool(execute);
+		const command = '[ "value" ]';
+		await tool.execute(command as never, {
+			agentId: "agent-1", conversationId: "conv-1", iteration: 1,
+		});
+		expect(execute).toHaveBeenCalledTimes(1);
+		expect(execute).toHaveBeenCalledWith(command, process.cwd(), expect.anything());
+	});
+
 	it("does not split ordinary command strings that are not JSON arrays", async () => {
 		const execute = vi.fn(async (command: string) => `ran:${command}`);
 		const tool = createShellTool(execute);
