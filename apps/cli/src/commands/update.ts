@@ -115,14 +115,14 @@ export function getInstallationInfo(
 			return {
 				packageManager: PackageManager.PNPM,
 				packageName,
-				updateCommand: `pnpm add -g ${DEFAULT_PACKAGE_NAME}@${tag}`,
+				updateCommand: `pnpm add -g ${packageName}@${tag}`,
 			};
 		}
 		if (scriptPath.includes("/.yarn/") || scriptPath.includes("/yarn/global")) {
 			return {
 				packageManager: PackageManager.YARN,
 				packageName,
-				updateCommand: `yarn global add ${DEFAULT_PACKAGE_NAME}@${tag}`,
+				updateCommand: `yarn global add ${packageName}@${tag}`,
 			};
 		}
 		// `bun add -g` symlinks bins into ~/.bun/bin, but realpathSync resolves
@@ -134,7 +134,7 @@ export function getInstallationInfo(
 			return {
 				packageManager: PackageManager.BUN,
 				packageName,
-				updateCommand: `bun add -g ${DEFAULT_PACKAGE_NAME}@${tag}`,
+				updateCommand: `bun add -g ${packageName}@${tag}`,
 			};
 		}
 		if (scriptPath.includes("/node_modules/")) {
