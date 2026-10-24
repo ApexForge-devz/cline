@@ -347,8 +347,24 @@ describe("ollama wire contract (real provider package)", () => {
 					message: {
 						role: "assistant",
 						tool_calls: [
-							{ function: { name: "read_scene", arguments: { path: "Main" } } },
-							{ function: { name: "find_object", arguments: { name: "Player" } } },
+							{
+								function: {
+									name: "read_scene",
+									arguments: {
+										path: "Main",
+										options: { includeChildren: true, maxDepth: 3 },
+									},
+								},
+							},
+							{
+								function: {
+									name: "find_object",
+									arguments: {
+										name: "Player",
+										components: ["Transform", "MeshRenderer"],
+									},
+								},
+							},
 						],
 					},
 				},
@@ -359,8 +375,21 @@ describe("ollama wire contract (real provider package)", () => {
 
 		const toolCalls = parts.filter((part) => part.type === "tool-call");
 		expect(toolCalls).toHaveLength(2);
-		expect((toolCalls[0] as { toolName: string }).toolName).toBe("read_scene");
-		expect((toolCalls[1] as { toolName: string }).toolName).toBe("find_object");
+		expect(
+			toolCalls.map((part) => ({
+				toolName: (part as { toolName: string }).toolName,
+				input: (part as { input: unknown }).input,
+			})),
+		).toEqual([
+			{
+				toolName: "read_scene",
+				input: { path: "Main", options: { includeChildren: true, maxDepth: 3 } },
+			},
+			{
+				toolName: "find_object",
+				input: { name: "Player", components: ["Transform", "MeshRenderer"] },
+			},
+		]);
 	});
 
 	it("includes tool_name on tool result messages", async () => {
