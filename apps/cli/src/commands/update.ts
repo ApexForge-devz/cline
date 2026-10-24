@@ -330,7 +330,8 @@ const CLIENT_COUNT_EXIT_TIMEOUT_MS = 3_000;
  * to the hub — at that point nothing is running that the swap could hurt.
  * The next launch picks up the new binary and a fresh hub.
  *
- * Skipped for npx, dev, unknown installs. Disable with CLINE_NO_AUTO_UPDATE=1.
+ * Skipped unless CLINE_UPDATE_PACKAGE_NAME explicitly names this fork's
+ * published package. Disable with CLINE_NO_AUTO_UPDATE=1 as well.
  */
 export function autoUpdateOnStartup(): void {
 	if (process.env.IS_DEV === "true") return;
