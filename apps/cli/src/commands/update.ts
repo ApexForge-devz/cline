@@ -20,7 +20,6 @@ import {
 // Never assume the official "cline" npm package is the update source for this
 // fork. Self-updates stay disabled unless a distributor explicitly configures
 // the package that contains its own published build.
-const DEFAULT_PACKAGE_NAME = "cline";
 export const CLI_UPDATE_PACKAGE_NAME_ENV = "CLINE_UPDATE_PACKAGE_NAME";
 
 function getConfiguredUpdatePackageName(): string | undefined {
@@ -39,7 +38,7 @@ export enum PackageManager {
 
 interface InstallationInfo {
 	packageManager: PackageManager;
-	packageName: string;
+	packageName?: string;
 	updateCommand?: string;
 }
 
@@ -94,7 +93,7 @@ function compareVersions(v1: string, v2: string): number {
 
 export function getInstallationInfo(
 	currentVersion: string,
-	packageName = DEFAULT_PACKAGE_NAME,
+	packageName = getConfiguredUpdatePackageName(),
 ): InstallationInfo {
 	const tag = getNpmTag(currentVersion);
 	try {
@@ -105,7 +104,7 @@ export function getInstallationInfo(
 		if (scriptPath.includes("/.npm/_npx") || scriptPath.includes("/npm/_npx")) {
 			return {
 				packageManager: PackageManager.NPX,
-				packageName,
+				...(packageName ? { packageName } : {}),
 			};
 		}
 		if (
@@ -114,15 +113,23 @@ export function getInstallationInfo(
 		) {
 			return {
 				packageManager: PackageManager.PNPM,
-				packageName,
-				updateCommand: `pnpm add -g ${packageName}@${tag}`,
+				...(packageName
+					? {
+							packageName,
+							updateCommand: `pnpm add -g ${packageName}@${tag}`,
+						}
+					: {}),
 			};
 		}
 		if (scriptPath.includes("/.yarn/") || scriptPath.includes("/yarn/global")) {
 			return {
 				packageManager: PackageManager.YARN,
-				packageName,
-				updateCommand: `yarn global add ${packageName}@${tag}`,
+				...(packageName
+					? {
+							packageName,
+							updateCommand: `yarn global add ${packageName}@${tag}`,
+						}
+					: {}),
 			};
 		}
 		// `bun add -g` symlinks bins into ~/.bun/bin, but realpathSync resolves
@@ -133,15 +140,23 @@ export function getInstallationInfo(
 		) {
 			return {
 				packageManager: PackageManager.BUN,
-				packageName,
-				updateCommand: `bun add -g ${packageName}@${tag}`,
+				...(packageName
+					? {
+							packageName,
+							updateCommand: `bun add -g ${packageName}@${tag}`,
+						}
+					: {}),
 			};
 		}
 		if (scriptPath.includes("/node_modules/")) {
 			return {
 				packageManager: PackageManager.NPM,
-				packageName,
-				updateCommand: `npm update -g ${packageName} --tag ${tag}`,
+				...(packageName
+					? {
+							packageName,
+							updateCommand: `npm update -g ${packageName} --tag ${tag}`,
+						}
+					: {}),
 			};
 		}
 	} catch {
@@ -149,7 +164,7 @@ export function getInstallationInfo(
 	}
 	return {
 		packageManager: PackageManager.UNKNOWN,
-		packageName,
+		...(packageName ? { packageName } : {}),
 	};
 }
 
@@ -483,7 +498,7 @@ export async function checkForUpdates(
 	}
 
 	const { packageName, updateCommand, packageManager } =
-		getInstallationInfo(currentVersion, updatePackageName ?? DEFAULT_PACKAGE_NAME);
+		getInstallationInfo(currentVersion, updatePackageName);
 
 	try {
 		const latestVersion = updatePackageName
