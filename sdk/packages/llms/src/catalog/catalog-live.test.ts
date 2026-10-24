@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	getGeneratedModelsForProvider,
 	getGeneratedProviderModels,
@@ -14,6 +14,8 @@ import {
 } from "./catalog-live";
 
 describe("models-dev-catalog", () => {
+	beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
+	afterEach(() => vi.unstubAllEnvs());
 	beforeEach(() => vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "1"));
 	afterEach(() => vi.unstubAllEnvs());
 	it("preserves model adapters and narrowly fills missing Go Qwen declarations", () => {
@@ -1126,8 +1128,7 @@ describe("models-dev-catalog", () => {
 		expect(fetcher).toHaveBeenCalledWith("https://models.dev/api.json");
 		expect(result["openai-native"]).toHaveProperty("gpt-live");
 	});
-
-it("does not fetch Cline-hosted recommendation models when cloud services are disabled", async () => {
+	it("does not fetch Cline-hosted recommendation models when cloud services are disabled", async () => {
 		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
 		const fetcher = vi.fn(async () => ({
 			ok: true,
