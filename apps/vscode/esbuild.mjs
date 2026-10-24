@@ -2,6 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import * as esbuild from "esbuild"
+import { telemetrySecretDefineValues } from "./scripts/telemetry-build-env.mjs"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -97,17 +98,12 @@ if (production) {
 	// IS_DEV is always disable in production builds.
 	buildEnvVars["process.env.IS_DEV"] = "false"
 }
-// Set the environment and telemetry env vars. The API key env vars need to be populated in the GitHub
-// workflows from the secrets.
+// Only inject telemetry credentials through the guarded helper. The default
+// fork build has no upstream PostHog key or collector endpoint.
 if (process.env.CLINE_ENVIRONMENT) {
 	buildEnvVars["process.env.CLINE_ENVIRONMENT"] = JSON.stringify(process.env.CLINE_ENVIRONMENT)
 }
-if (process.env.TELEMETRY_SERVICE_API_KEY) {
-	buildEnvVars["process.env.TELEMETRY_SERVICE_API_KEY"] = JSON.stringify(process.env.TELEMETRY_SERVICE_API_KEY)
-}
-if (process.env.ERROR_SERVICE_API_KEY) {
-	buildEnvVars["process.env.ERROR_SERVICE_API_KEY"] = JSON.stringify(process.env.ERROR_SERVICE_API_KEY)
-}
+Object.assign(buildEnvVars, telemetrySecretDefineValues(process.env))
 
 // OpenTelemetry configuration (injected at build time from GitHub secrets)
 // These provide production defaults that can be overridden at runtime via environment variables
@@ -134,9 +130,6 @@ if (process.env.OTEL_EXPORTER_OTLP_PROTOCOL) {
 }
 if (process.env.OTEL_EXPORTER_OTLP_ENDPOINT) {
 	buildEnvVars["process.env.OTEL_EXPORTER_OTLP_ENDPOINT"] = JSON.stringify(process.env.OTEL_EXPORTER_OTLP_ENDPOINT)
-}
-if (process.env.OTEL_EXPORTER_OTLP_HEADERS) {
-	buildEnvVars["process.env.OTEL_EXPORTER_OTLP_HEADERS"] = JSON.stringify(process.env.OTEL_EXPORTER_OTLP_HEADERS)
 }
 if (process.env.OTEL_METRIC_EXPORT_INTERVAL) {
 	buildEnvVars["process.env.OTEL_METRIC_EXPORT_INTERVAL"] = JSON.stringify(process.env.OTEL_METRIC_EXPORT_INTERVAL)

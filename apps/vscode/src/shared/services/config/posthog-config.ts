@@ -31,16 +31,14 @@ export interface PostHogClientValidConfig extends PostHogClientConfig {
 const useDevEnv = process.env.IS_DEV === "true" || process.env.CLINE_ENVIRONMENT === "local"
 
 /**
- * PostHog configuration for Production Environment.
- * NOTE: The production environment variables will be injected at build time in CI/CD pipeline.
- * IMPORTANT: The secrets must be added to the GitHub Secrets and matched with the environment variables names
- * defined in the .github/workflows/ext-vscode-publish-stable.yml workflow.
- * NOTE: The development environment variables should be retrieved from 1password shared vault.
+ * PostHog configuration is opt-in in this fork. Do not default to the original
+ * project's collector: builds must provide a fork-controlled host and
+ * intentionally configured credentials to enable PostHog telemetry.
  */
 export const posthogConfig: PostHogClientConfig = {
 	apiKey: BUILD_CONSTANTS.TELEMETRY_SERVICE_API_KEY,
 	errorTrackingApiKey: BUILD_CONSTANTS.ERROR_SERVICE_API_KEY,
-	host: "https://data.cline.bot",
+	host: BUILD_CONSTANTS.TELEMETRY_SERVICE_HOST || "",
 	uiHost: useDevEnv ? "https://us.i.posthog.com" : "https://us.posthog.com",
 	enableErrorAutocapture: BUILD_CONSTANTS.ENABLE_ERROR_AUTOCAPTURE === "true",
 }
