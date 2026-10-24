@@ -385,20 +385,23 @@ describe("default search_codebase tool", () => {
 		]);
 	});
 
-	it("normalizes JSON-serialized query arrays but preserves regex character classes", async () => {
+	it("normalizes JSON-serialized query arrays but preserves regex character classes and quote patterns", async () => {
 		const execute = vi.fn(async (query: string) => `matches:${query}`);
 		const tool = createSearchTool(execute);
 		await tool.execute(String.raw`["Player", "[A-Z]"]` as never, {
 			agentId: "agent-1", conversationId: "conv-1", iteration: 1,
 		});
-		await tool.execute({ queries: '["Health", "Transform"]' } as never, {
+		await tool.execute({ queries: '[ "Health", "Transform" ]' } as never, {
 			agentId: "agent-1", conversationId: "conv-1", iteration: 2,
 		});
 		await tool.execute({ queries: "[A-Z]" } as never, {
 			agentId: "agent-1", conversationId: "conv-1", iteration: 3,
 		});
+		await tool.execute({ queries: '["]' } as never, {
+			agentId: "agent-1", conversationId: "conv-1", iteration: 4,
+		});
 		expect(execute.mock.calls.map(([query]) => query)).toEqual([
-			"Player", "[A-Z]", "Health", "Transform", "[A-Z]",
+			"Player", "[A-Z]", "Health", "Transform", "[A-Z]", '["]',
 		]);
 	});
 
@@ -743,15 +746,18 @@ describe("default run_commands tool", () => {
 		expect(execute).toHaveBeenNthCalledWith(4, String.raw`Get-ChildItem Assets\Packs`, process.cwd(), expect.anything());
 	});
 
-	it("preserves bracket-based shell test commands", async () => {
+	it("preserves bracket-based shell test commands and quote-containing regexes", async () => {
 		const execute = vi.fn(async (command: string) => `ran:${command}`);
 		const tool = createShellTool(execute);
-		const command = '[ "value" ]';
-		await tool.execute(command as never, {
-			agentId: "agent-1", conversationId: "conv-1", iteration: 1,
-		});
-		expect(execute).toHaveBeenCalledTimes(1);
-		expect(execute).toHaveBeenCalledWith(command, process.cwd(), expect.anything());
+		const commands = ['[ "value" ]', '["]'];
+		for (const [index, command] of commands.entries()) {
+			await tool.execute(command as never, {
+				agentId: "agent-1", conversationId: "conv-1", iteration: index + 1,
+			});
+		}
+		expect(execute).toHaveBeenCalledTimes(2);
+		expect(execute).toHaveBeenNthCalledWith(1, commands[0], process.cwd(), expect.anything());
+		expect(execute).toHaveBeenNthCalledWith(2, commands[1], process.cwd(), expect.anything());
 	});
 
 	it("does not split ordinary command strings that are not JSON arrays", async () => {

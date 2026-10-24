@@ -140,14 +140,84 @@ export function coalesceOrphanReadRanges(input: unknown): unknown {
  * an array of JSON strings or objects. This avoids interpreting shell bracket
  * expressions such as `[A-Z]` or `[ -d path ]` as tool argument arrays.
  */
-function parseSerializedArrayInput(value: string, description: string): unknown[] | undefined {
+function hasTopLevelArraySeparator(value: string): boolean {
+	let inDouble = false;
+	let inSingle = false;
+	let escapeNext = false;
+	let nestedArrays = 0;
+	let nestedObjects = 0;
+
+	for (let index = 1; index < value.length - 1; index += 1) {
+		const character = value[index];
+		if (escapeNext) {
+			escapeNext = false;
+			continue;
+		}
+		if ((inDouble || inSingle) && character === "\\") {
+			escapeNext = true;
+			continue;
+		}
+		if (!inSingle && character === '"') {
+			inDouble = !inDouble;
+			continue;
+		}
+		if (!inDouble && character === "'") {
+			inSingle = !inSingle;
+			continue;
+		}
+		if (inDouble || inSingle) continue;
+
+		switch (character) {
+			case "[":
+				nestedArrays += 1;
+				break;
+			case "]":
+				nestedArrays -= 1;
+				break;
+			case "{":
+				nestedObjects += 1;
+				break;
+			case "}":
+				nestedObjects -= 1;
+				break;
+			case ",":
+				if (nestedArrays === 0 && nestedObjects === 0) return true;
+				break;
+		}
+	}
+	return false;
+}
+
+/**
+ * Parse JSON-encoded arrays emitted as strings by some local models.
+ * Repair malformed quoting/backslashes only when the input already resembles
+ * an array of JSON strings or objects. This avoids interpreting shell bracket
+ * expressions such as [A-Z], ["], or [ -d path ] as tool argument arrays.
+ */
+function parseSerializedArrayInput(
+	value: string,
+	description: string,
+	allowSingleElementArray = false,
+): unknown[] | undefined {
 	const trimmed = value.trim();
 	if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return undefined;
 
-	// Require an unambiguous JSON-like opening token. In particular, do not
-	// reinterpret shell tests such as `[ "value" ]` as a one-element array.
-	const firstEntry = trimmed[1];
+	// Ignore whitespace after '[' while inspecting the first token, but don't
+	// confuse a shell test such as [ "value" ] with a serialized one-item
+	// array when there is no field schema to disambiguate it.
+	const inner = trimmed.slice(1, -1).trimStart();
+	const firstEntry = inner[0];
 	if (firstEntry !== '"' && firstEntry !== "'" && firstEntry !== "{") {
+		return undefined;
+	}
+	const hasSeparator = hasTopLevelArraySeparator(trimmed);
+	const hasWhitespaceAfterOpeningBracket = /^\[\s+/.test(trimmed);
+	if (
+		hasWhitespaceAfterOpeningBracket &&
+		!hasSeparator &&
+		!allowSingleElementArray &&
+		firstEntry !== "{"
+	) {
 		return undefined;
 	}
 
@@ -161,8 +231,14 @@ function parseSerializedArrayInput(value: string, description: string): unknown[
 
 	const repaired = parseJsonStream(trimmed);
 	if (Array.isArray(repaired)) return repaired;
+
+	// Regexes such as ["], as well as ordinary shell text, can look bracketed
+	// without being serialized arrays. Preserve ambiguous input unless there is
+	// a top-level separator or an object entry, which strongly suggests a list.
+	if (!hasSeparator && firstEntry !== "{") return undefined;
 	throw new Error(
-		`Could not parse the serialized ${description} array. Send an array value, or escape backslashes in JSON strings (for example, \\\\).`,
+		"Could not parse the serialized " + description +
+		" array. Send an array value, or escape backslashes in JSON strings (for example, \\\\).",
 	);
 }
 
@@ -196,7 +272,7 @@ export function normalizeSerializedArrayInputs(
 	for (const field of arrayFields) {
 		const value = normalized[field];
 		if (typeof value !== "string") continue;
-		const parsed = parseSerializedArrayInput(value, description);
+		const parsed = parseSerializedArrayInput(value, description, true);
 		if (parsed) {
 			normalized[field] = parsed;
 			changed = true;
