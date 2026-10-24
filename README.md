@@ -14,7 +14,7 @@ The open source coding agent in your IDE, terminal, & desktop.
 <table>
 <tbody>
 <td align="center">
-<a href="https://docs.cline.bot" target="_blank"><strong>Docs</strong></a>
+<a href="https://github.com/ApexForge-devz/cline/tree/my-local-changes/docs" target="_blank"><strong>Docs source</strong></a>
 </td>
 <td align="center">
 <a href="https://discord.gg/cline" target="_blank"><strong>Discord</strong></a>
@@ -26,7 +26,7 @@ The open source coding agent in your IDE, terminal, & desktop.
 <a href="https://github.com/ApexForge-devz/cline/issues/new/choose" target="_blank"><strong>Feature Requests</strong></a>
 </td>
 <td align="center">
-<a href="https://cline.bot/join-us" target="_blank"><strong>Join us!</strong></a>
+<a href="https://github.com/ApexForge-devz/cline/issues" target="_blank"><strong>Contribute</strong></a>
 </td>
 </tbody>
 </table>
@@ -48,7 +48,9 @@ Interactive chat or fully headless
 for CI/CD and scripting.
 
 ```
-npm i -g cline
+bun install
+bun run build:sdk
+bun run cli
 ```
 
 <a href="./apps/cli/README.md">Learn more</a>
@@ -77,7 +79,7 @@ AI coding assistant in your editor.
 Create files, run commands, browse the web,
 and use tools with human-in-the-loop approval.
 
-<a href="https://marketplace.visualstudio.com/items?itemName=saoudrizwan.claude-dev">Install from VS Marketplace</a>
+<a href="https://github.com/ApexForge-devz/cline/tree/my-local-changes/apps/vscode">Build from source</a>
 <br><br>
 
 </td>
@@ -110,7 +112,7 @@ Build your own AI agents and integrations powered by the same engine that runs t
 npm install @cline/sdk
 ```
 
-<a href="https://docs.cline.bot/cline-sdk/overview">Documentation</a>
+<a href="https://github.com/ApexForge-devz/cline/blob/my-local-changes/docs/sdk/overview.mdx">Documentation</a>
 <br><br>
 
 </td>
@@ -129,7 +131,7 @@ npm install @cline/sdk
 | **VS Code Extension** | The Marketplace extension and extension host integration. | [`/`](./) (WIP migrating) | [CHANGELOG.md](./CHANGELOG.md) |
 | **Desktop App** | Native macOS and Windows app (Tauri shell, Bun sidecar, Next.js UI). | [`apps/examples/desktop-app/`](./apps/examples/desktop-app/) | [CHANGELOG.md](./apps/examples/desktop-app/CHANGELOG.md) |
 | **JetBrains Plugin** | JetBrains-hosted client that talks to the shared agent core. | Currently we are not open-sourcing JetBrains plugins | - |
-| **Docs site** | Public documentation pages. | [`docs/`](https://docs.cline.bot/) | - |
+| **Docs site** | Public documentation pages. | [`docs/`](https://github.com/ApexForge-devz/cline/tree/my-local-changes/docs) | - |
 
 ## Edits Code Across Your Project
 
@@ -228,7 +230,7 @@ cline --json "List all TODO comments" | jq -r 'select(.type == "agent_event" and
 
 ## Contributing
 
-Start with the [Contributing Guide](CONTRIBUTING.md). Join our [Discord](https://discord.gg/cline) and head to the `#contributors` channel to connect with other contributors. Check our [careers page](https://cline.bot/join-us) for full-time roles.
+Start with the [Contributing Guide](CONTRIBUTING.md). Join our [Discord](https://discord.gg/cline) and head to the `#contributors` channel to connect with other contributors. For contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
