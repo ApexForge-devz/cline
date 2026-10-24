@@ -91,7 +91,7 @@ The same Cline experience in IntelliJ IDEA,
 PyCharm, WebStorm, GoLand, and the rest of
 the JetBrains family.
 
-<a href="https://plugins.jetbrains.com/plugin/28247-cline">Install from JetBrains Marketplace</a>
+This fork does not publish a JetBrains Marketplace extension.
 <br><br>
 
 </td>
@@ -108,9 +108,14 @@ the JetBrains family.
 
 Build your own AI agents and integrations powered by the same engine that runs the CLI, desktop app, VS Code extension, and JetBrains plugin. Custom tools, multi-agent teams, connectors, scheduled automations, and more.
 
+This fork does not publish the upstream `@cline/sdk` npm package. Build the workspace packages from source:
+
+```bash
+bun install
+bun run build:sdk
 ```
-npm install @cline/sdk
-```
+
+See the [fork's SDK overview](https://github.com/ApexForge-devz/cline/blob/my-local-changes/docs/sdk/overview.mdx) and [SDK examples](https://github.com/ApexForge-devz/cline/tree/my-local-changes/sdk/examples).
 
 <a href="https://github.com/ApexForge-devz/cline/blob/my-local-changes/docs/sdk/overview.mdx">Documentation</a>
 <br><br>
