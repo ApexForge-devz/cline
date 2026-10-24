@@ -1,29 +1,30 @@
 ---
 title: "Cline SDK"
 sidebarTitle: "Overview"
-description: "TypeScript packages for embedding Cline's agent runtime in your own applications."
+description: "Build TypeScript packages from this fork to embed its agent runtime in your own applications."
 ---
 
-The Cline SDK is an open source framework for building agentic applications, and is the same harness used in the Cline IDE extensions and CLI. It uses a plugin architecture that makes it easy to customize and comes with all the features you expect from agents like checkpoints, web fetch, MCPs, cron jobs, subagents, and more.
+The SDK in this fork is an open source framework for building agentic applications and shares its runtime with this fork's IDE extension and CLI. It uses a plugin architecture that makes it easy to customize and comes with all the features you expect from agents like checkpoints, web fetch, MCPs, cron jobs, subagents, and more.
 
 Use the Cline SDK to run agents from CI/CD pipelines, create automations for end-to-end workflows, or embed agents directly inside your products.
 
-## Install
+## Build from source
+
+This fork does not publish the upstream `@cline/sdk` package under a separate namespace. From the repository root, run:
 
 ```bash
-npm install @cline/sdk
+bun install
+bun run build:sdk
 ```
 
-`@cline/sdk` exports all SDK packages: `@cline/core` for the full agent harness, `@cline/agents` for the stateless agent loop, `@cline/llms` for control over the model gateway, and `@cline/shared` for common utilities.
-
-Requires Node.js 22 or later.
+The workspace contains `@cline/sdk`, `@cline/core`, `@cline/agents`, `@cline/llms`, and `@cline/shared`. Use the examples and workspace dependencies to build against this fork. Requires Bun and a supported Node.js runtime for execution.
 
 ## SDK Skill
 
-If you use a coding agent (Claude Code, Codex, Cline, etc.), install the [Cline SDK skill](https://github.com/cline/sdk-skill) to give your agent context on the SDK's APIs and best practices to help you build with the Cline SDK.
+If you use a coding agent (Claude Code, Codex, Cline, etc.), install the [Cline SDK skill in this fork](https://github.com/ApexForge-devz/cline/blob/my-local-changes/.agents/skills/cline-sdk/SKILL.md) to give your agent context on the SDK's APIs and best practices to help you build with the Cline SDK.
 
-```bash
-npx skills add cline/sdk-skill
+```text
+.agents/skills/cline-sdk/SKILL.md
 ```
 
 Prompt it to scaffold agents, create custom tools, wire up plugins, configure providers, and more.
@@ -50,7 +51,7 @@ const result = await agent.run("Explain what an SDK is in two sentences.")
 ```
 
 <Note>
-  Here is a complete [quickstart example](https://github.com/cline/cline/tree/main/apps/examples/quickstart). Clone it and run `bun dev` to try it.
+  Here is a complete [quickstart example](https://github.com/ApexForge-devz/cline/tree/my-local-changes/apps/examples/quickstart). Clone it and run `bun dev` to try it.
 </Note>
 
 ## Packages
