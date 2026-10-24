@@ -12,7 +12,7 @@ import {
 } from "./definitions";
 import { CommandExitError } from "./executors/bash";
 import { RUN_COMMAND_QUERY_PREVIEW_LIMIT, TimeoutError } from "./helpers";
-import { type EditFileInput, INPUT_ARG_CHAR_LIMIT } from "./schemas";
+import { type EditFileInput, INPUT_ARG_CHAR_LIMIT, StructuredCommandInputSchema } from "./schemas";
 import type { SkillsExecutorWithMetadata } from "./types";
 
 function hasSchemaKey(value: unknown, key: string): boolean {
@@ -2022,6 +2022,14 @@ describe("default read_files tool", () => {
 });
 
 describe("zod schema conversion", () => {
+	it("documents host-dependent structured command argument handling", () => {
+		expect(StructuredCommandInputSchema.shape.command.description).toContain(
+			"visible terminal may quote it for the active shell",
+		);
+		expect(StructuredCommandInputSchema.shape.args.description).toContain(
+			"visible-terminal hosts quote them for the configured shell",
+		);
+	});
 	it("advertises run_commands as string-only command arrays", () => {
 		const tool = createShellTool(async () => "ok");
 		const inputSchema = tool.inputSchema as Record<string, unknown>;

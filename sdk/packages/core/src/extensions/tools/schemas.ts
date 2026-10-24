@@ -134,11 +134,11 @@ export const StructuredCommandInputSchema = z.object({
 	command: z
 		.string()
 		.min(1)
-		.describe("The executable to run directly without shell parsing."),
+		.describe("The executable name or path. Hosts that execute through a visible terminal may quote it for the active shell."),
 	args: z
 		.array(z.string())
 		.optional()
-		.describe("Optional argv list passed directly to the executable."),
+		.describe("Optional argument list. Hosts with direct process execution pass these as argv; visible-terminal hosts quote them for the configured shell."),
 });
 
 export const StructuredCommandEntrySchema = z.union([
