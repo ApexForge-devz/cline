@@ -1,4 +1,4 @@
-# Cline
+# Cline ApexForge
 <div align="center">
 <table>
 <tbody>
@@ -15,7 +15,7 @@
 <a href="https://github.com/ApexForge-devz/cline/issues" target="_blank"><strong>Feature Requests</strong></a>
 </td>
 <td align="center">
-<a href="https://docs.cline.bot/getting-started/installing-cline" target="_blank"><strong>Getting Started</strong></a>
+<a href="https://github.com/ApexForge-devz/cline/blob/my-local-changes/docs/getting-started/installing-cline.mdx" target="_blank"><strong>Getting Started</strong></a>
 </td>
 </tbody>
 </table>
@@ -34,7 +34,7 @@ Thanks to [Claude Sonnet's agentic coding capabilities](https://www.anthropic.c
 4. When a task is completed, Cline will present the result to you with a terminal command like `open -a "Google Chrome" index.html`, which you run with a click of a button.
 
 > [!TIP]
-> Follow [this guide](https://docs.cline.bot/usage/ide#move-cline-to-the-right-sidebar) to open Cline on the right side of your editor. This lets you use Cline side-by-side with your file explorer, and see how he changes your workspace more clearly.
+> Follow [this guide](https://github.com/ApexForge-devz/cline/blob/my-local-changes/docs/usage/ide.mdx) to open Cline on the right side of your editor. This lets you use Cline side-by-side with your file explorer, and see how he changes your workspace more clearly.
 
 ---
 
@@ -130,11 +130,11 @@ For example, when working with a local web server, you can use 'Restore Workspac
 
 ## Contributing
 
-To contribute to the project, start with our [Contributing Guide](CONTRIBUTING.md) to learn the basics. You can also join our [Discord](https://discord.gg/cline) to chat with other contributors in the `#contributors` channel. If you're looking for full-time work, check out our open positions on our [careers page](https://cline.bot/join-us)!
+To contribute to this fork, start with the [Contributing Guide](CONTRIBUTING.md). Report issues or request features through the [ApexForge repository issue tracker](https://github.com/ApexForge-devz/cline/issues).
 
 ## Enterprise
 
-Get the same Cline experience with enterprise-grade controls: SSO (SAML/OIDC), global policies and configuration, observability with audit trails, private networking (VPC/private link), and self-hosted or on-prem deployments, and enterprise support. Learn more at our [enterprise page](https://cline.bot/enterprise) or [talk to us](https://cline.bot/contact-sales).
+
 
 
 ## License
