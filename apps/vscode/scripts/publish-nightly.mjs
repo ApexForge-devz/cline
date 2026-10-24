@@ -206,9 +206,10 @@ class NightlyPublisher {
 	 *
 	 * The repo root is a workspace package ("."). When npm installs dependencies,
 	 * it creates a self-link at node_modules/<package-name>. Nightly packaging
-	 * changes package.json name from "claude-dev" to "cline-nightly". If we don't
-	 * align this link, vsce's dependency detection (`npm list --production`) fails
-	 * with ELSPROBLEMS (missing cline-nightly + extraneous claude-dev).
+	 * changes package.json name from the original workspace package name to
+	 * "cline-nightly". If we don't align this link, vsce's dependency detection
+	 * (`npm list --production`) fails with ELSPROBLEMS because the workspace link
+	 * still points to the old package name.
 	 */
 	reconcileWorkspaceSelfLinkForNightly() {
 		const originalPath = config.originalWorkspaceLinkPath
