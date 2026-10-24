@@ -392,6 +392,39 @@ describe("ollama wire contract (real provider package)", () => {
 		]);
 	});
 
+	it("preserves serialized array fields from native Ollama tool arguments", async () => {
+		const serializedCommands = '[ "echo hello", "pwd" ]';
+		const { parts } = await streamThroughVendor({
+			responseLines: [
+				{
+					model: "test-model",
+					created_at: "2024-01-01T00:00:00Z",
+					done: false,
+					message: {
+						role: "assistant",
+						tool_calls: [
+							{
+								function: {
+									name: "run_commands",
+									arguments: { commands: serializedCommands },
+								},
+							},
+						],
+					},
+				},
+				DONE_CHUNK,
+			],
+			prompt: userText("run two commands"),
+		});
+
+		const toolCall = parts.find((part) => part.type === "tool-call");
+		expect(toolCall).toMatchObject({
+			type: "tool-call",
+			toolName: "run_commands",
+			input: { commands: serializedCommands },
+		});
+	});
+
 	it("includes tool_name on tool result messages", async () => {
 		const { requests } = await streamThroughVendor({
 			responseLines: [textChunk("done"), DONE_CHUNK],

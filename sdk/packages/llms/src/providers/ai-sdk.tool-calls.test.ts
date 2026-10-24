@@ -166,6 +166,20 @@ describe("ai-sdk adapter malformed tool calls", () => {
 		expect(findToolInput(events)).toEqual({ commands: "ls -la" });
 	});
 
+	it("preserves serialized array fields for normalization by the executor", async () => {
+		const serializedCommands = '[ "echo hello", "pwd" ]';
+		const events = await streamToolCallEvents(
+			sseToolCall(
+				"run_commands",
+				JSON.stringify({ commands: serializedCommands }),
+			),
+			[RUN_COMMANDS_TOOL],
+		);
+
+		expect(findParseError(events)).toBeUndefined();
+		expect(findToolInput(events)).toEqual({ commands: serializedCommands });
+	});
+
 	it("passes well-formed input through unchanged", async () => {
 		const events = await streamToolCallEvents(
 			sseToolCall("run_commands", '{"commands": ["ls", "pwd"]}'),
