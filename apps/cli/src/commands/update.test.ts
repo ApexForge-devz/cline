@@ -101,12 +101,23 @@ describe("getInstallationInfo", () => {
 		}
 	});
 
+	it("detects package managers without selecting the upstream package by default", () => {
+		const wrapperPath = createTempFile("lib/node_modules/cline/bin/cline");
+		process.env.CLINE_WRAPPER_PATH = wrapperPath;
+		process.argv = ["bun", "/$bunfs/root/cline", "update"];
+		delete process.env.CLINE_UPDATE_PACKAGE_NAME;
+
+		expect(getInstallationInfo("1.2.3")).toEqual({
+			packageManager: PackageManager.NPM,
+		});
+	});
+
 	it("detects npm installs from the wrapper path passed to the compiled binary", () => {
 		const wrapperPath = createTempFile("lib/node_modules/cline/bin/cline");
 		process.env.CLINE_WRAPPER_PATH = wrapperPath;
 		process.argv = ["bun", "/$bunfs/root/cline", "update", "--verbose"];
 
-		expect(getInstallationInfo("1.2.3")).toEqual({
+		expect(getInstallationInfo("1.2.3", "cline")).toEqual({
 			packageManager: PackageManager.NPM,
 			packageName: "cline",
 			updateCommand: "npm update -g cline --tag latest",
@@ -118,7 +129,7 @@ describe("getInstallationInfo", () => {
 		process.env.CLINE_WRAPPER_PATH = wrapperPath;
 		process.argv = ["bun", "/$bunfs/root/cline", "update", "--verbose"];
 
-		expect(getInstallationInfo("1.2.3-nightly.456")).toEqual({
+		expect(getInstallationInfo("1.2.3-nightly.456", "cline")).toEqual({
 			packageManager: PackageManager.NPM,
 			packageName: "cline",
 			updateCommand: "npm update -g cline --tag nightly",
@@ -148,7 +159,7 @@ describe("getInstallationInfo", () => {
 		process.env.CLINE_WRAPPER_PATH = wrapperPath;
 		process.argv = ["bun", "/$bunfs/root/cline", "update", "--verbose"];
 
-		expect(getInstallationInfo("1.2.3")).toEqual({
+		expect(getInstallationInfo("1.2.3", "cline")).toEqual({
 			packageManager: PackageManager.BUN,
 			packageName: "cline",
 			updateCommand: "bun add -g cline@latest",
@@ -159,9 +170,9 @@ describe("getInstallationInfo", () => {
 		delete process.env.CLINE_WRAPPER_PATH;
 		process.argv = ["bun", "/$bunfs/root/cline", "update", "--verbose"];
 
+		delete process.env.CLINE_UPDATE_PACKAGE_NAME;
 		expect(getInstallationInfo("1.2.3")).toEqual({
 			packageManager: PackageManager.UNKNOWN,
-			packageName: "cline",
 		});
 	});
 });
