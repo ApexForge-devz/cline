@@ -155,7 +155,10 @@ export function getDesktopFeatureFlagsService(options?: {
 			telemetry: options?.telemetry,
 			logger: options?.logger,
 			context: getDesktopFeatureFlagsContext(),
-			cacheFilePath: resolveDesktopFeatureFlagsCachePath(),
+			// A disabled cloud policy must not hydrate stale Cline-hosted rollout values.
+			cacheFilePath: isClineCloudServicesEnabled()
+				? resolveDesktopFeatureFlagsCachePath()
+				: undefined,
 			persistentCacheMaxAgeMs: DESKTOP_FEATURE_FLAGS_CACHE_MAX_AGE_MS,
 		});
 	}

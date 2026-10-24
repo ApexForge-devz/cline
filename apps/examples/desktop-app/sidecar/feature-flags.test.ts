@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 	setContext: vi.fn(),
 	getBooleanFlagEnabled: vi.fn((_flag: unknown): boolean => false),
 	getFlagPayload: vi.fn((_flag: unknown): unknown => undefined),
+	featureFlagsServiceOptions: vi.fn((_options?: Record<string, unknown>) => {}),
 }));
 
 vi.mock("@cline/core", async () => {
@@ -36,6 +37,7 @@ vi.mock("@cline/core", async () => {
 			options: Record<string, unknown>;
 			constructor(options: Record<string, unknown>) {
 				this.options = options;
+				mocks.featureFlagsServiceOptions(options);
 			}
 			poll = mocks.poll;
 			dispose = mocks.dispose;
@@ -118,6 +120,17 @@ describe("getDesktopFeatureFlagsService", () => {
 		expect(mocks.PostHogFeatureFlagsProvider).toHaveBeenCalledTimes(1);
 		expect(mocks.buildClinePostHogClient).toHaveBeenCalledWith("phc_key");
 		expect(mocks.NoOpFeatureFlagsProvider).not.toHaveBeenCalled();
+	});
+
+	it("does not hydrate the persistent Cline-hosted flag cache when cloud services are disabled", () => {
+		process.env.TELEMETRY_SERVICE_API_KEY = "phc_key";
+		getDesktopFeatureFlagsService();
+
+		expect(mocks.featureFlagsServiceOptions).toHaveBeenCalledWith(
+			expect.objectContaining({ cacheFilePath: undefined }),
+		);
+		expect(mocks.NoOpFeatureFlagsProvider).toHaveBeenCalledTimes(1);
+		expect(mocks.PostHogFeatureFlagsProvider).not.toHaveBeenCalled();
 	});
 
 	it("does not initialize PostHog when cloud services are disabled, even with a key", () => {
