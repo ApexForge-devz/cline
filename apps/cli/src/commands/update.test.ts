@@ -253,6 +253,33 @@ describe("auto update settings", () => {
 		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
+	it("blocks startup update checks for upstream-owned package names", () => {
+		const settingsPath = createTempFile("data/global-settings.json");
+		writeFileSync(settingsPath, JSON.stringify({ autoUpdateEnabled: true }));
+		process.env.CLINE_GLOBAL_SETTINGS_PATH = settingsPath;
+		process.env.CLINE_UPDATE_PACKAGE_NAME = "cline";
+		delete process.env.IS_DEV;
+		delete process.env.CLINE_NO_AUTO_UPDATE;
+		const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(
+			new Error("upstream checks must be blocked"),
+		);
+
+		autoUpdateOnStartup();
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it("blocks manual update checks for upstream-owned package names", async () => {
+		process.env.CLINE_UPDATE_PACKAGE_NAME = "@cline/cli";
+		const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(
+			new Error("upstream checks must be blocked"),
+		);
+
+		await expect(checkForUpdates({ includeKanban: false })).resolves.toBe(0);
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
 	it("does not perform manual CLI self-update checks without a configured package", async () => {
 		delete process.env.CLINE_UPDATE_PACKAGE_NAME;
 		const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(
@@ -268,7 +295,7 @@ describe("auto update settings", () => {
 		const settingsPath = createTempFile("data/global-settings.json");
 		writeFileSync(settingsPath, JSON.stringify({ autoUpdateEnabled: false }));
 		process.env.CLINE_GLOBAL_SETTINGS_PATH = settingsPath;
-		process.env.CLINE_UPDATE_PACKAGE_NAME = "cline";
+		process.env.CLINE_UPDATE_PACKAGE_NAME = "cline-apexforge";
 		delete process.env.CLINE_NO_AUTO_UPDATE;
 		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
 			ok: true,
@@ -278,7 +305,7 @@ describe("auto update settings", () => {
 		await checkForUpdates({ includeKanban: false });
 
 		expect(fetchSpy).toHaveBeenCalledWith(
-			"https://registry.npmjs.org/cline/latest",
+			"https://registry.npmjs.org/cline-apexforge/latest",
 		);
 	});
 });

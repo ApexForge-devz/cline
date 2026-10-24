@@ -17,14 +17,19 @@ import {
 	spawnKanbanInstallProcess,
 } from "./kanban";
 
-// Never assume the official "cline" npm package is the update source for this
-// fork. Self-updates stay disabled unless a distributor explicitly configures
-// the package that contains its own published build.
+// Never allow this fork to check or install the upstream-owned CLI/SDK
+// packages, even when an inherited environment variable names them.
 export const CLI_UPDATE_PACKAGE_NAME_ENV = "CLINE_UPDATE_PACKAGE_NAME";
 
 function getConfiguredUpdatePackageName(): string | undefined {
 	const packageName = process.env[CLI_UPDATE_PACKAGE_NAME_ENV]?.trim();
-	return packageName || undefined;
+	if (!packageName) return undefined;
+
+	const normalizedName = packageName.toLowerCase();
+	if (normalizedName === "cline" || normalizedName.startsWith("@cline/")) {
+		return undefined;
+	}
+	return packageName;
 }
 
 export enum PackageManager {
