@@ -34,7 +34,16 @@ const originalWrapperPath = process.env.CLINE_WRAPPER_PATH;
 const originalGlobalSettingsPath = process.env.CLINE_GLOBAL_SETTINGS_PATH;
 const originalIsDev = process.env.IS_DEV;
 const originalNoAutoUpdate = process.env.CLINE_NO_AUTO_UPDATE;
+const originalUpdatePackageName = process.env.CLINE_UPDATE_PACKAGE_NAME;
 const tempDirs: string[] = [];
+
+afterEach(() => {
+	if (originalUpdatePackageName === undefined) {
+		delete process.env.CLINE_UPDATE_PACKAGE_NAME;
+	} else {
+		process.env.CLINE_UPDATE_PACKAGE_NAME = originalUpdatePackageName;
+	}
+});
 
 function createFile(path: string): string {
 	mkdirSync(dirname(path), { recursive: true });
@@ -116,6 +125,20 @@ describe("getInstallationInfo", () => {
 		});
 	});
 
+	it("uses the configured fork package name when building update commands", () => {
+		const wrapperPath = createTempFile(
+			".bun/install/global/node_modules/cline/bin/cline",
+		);
+		process.env.CLINE_WRAPPER_PATH = wrapperPath;
+		process.argv = ["bun", "/$bunfs/root/cline", "update"];
+
+		expect(getInstallationInfo("1.2.3", "@apexforge/cline-cli")).toEqual({
+			packageManager: PackageManager.BUN,
+			packageName: "@apexforge/cline-cli",
+			updateCommand: "bun add -g @apexforge/cline-cli@latest",
+		});
+	});
+
 	it("detects bun global installs from the resolved install path", () => {
 		// bun symlinks ~/.bun/bin/cline -> ~/.bun/install/global/node_modules/...,
 		// and realpathSync resolves through the symlink before detection runs.
@@ -187,10 +210,11 @@ describe("auto update settings", () => {
 		}
 	});
 
-	it("skips startup auto update when disabled globally", () => {
+	it("does not check the public CLI package unless a fork update package is configured", () => {
 		const settingsPath = createTempFile("data/global-settings.json");
-		writeFileSync(settingsPath, JSON.stringify({ autoUpdateEnabled: false }));
+		writeFileSync(settingsPath, JSON.stringify({ autoUpdateEnabled: true }));
 		process.env.CLINE_GLOBAL_SETTINGS_PATH = settingsPath;
+		delete process.env.CLINE_UPDATE_PACKAGE_NAME;
 		delete process.env.IS_DEV;
 		delete process.env.CLINE_NO_AUTO_UPDATE;
 		const fetchSpy = vi
@@ -202,10 +226,38 @@ describe("auto update settings", () => {
 		expect(fetchSpy).not.toHaveBeenCalled();
 	});
 
+	it("skips startup auto update when disabled globally", () => {
+		const settingsPath = createTempFile("data/global-settings.json");
+		writeFileSync(settingsPath, JSON.stringify({ autoUpdateEnabled: false }));
+		process.env.CLINE_GLOBAL_SETTINGS_PATH = settingsPath;
+		process.env.CLINE_UPDATE_PACKAGE_NAME = "cline";
+		delete process.env.IS_DEV;
+		delete process.env.CLINE_NO_AUTO_UPDATE;
+		const fetchSpy = vi
+			.spyOn(globalThis, "fetch")
+			.mockRejectedValue(new Error("should not fetch"));
+
+		autoUpdateOnStartup();
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
+	it("does not perform manual CLI self-update checks without a configured package", async () => {
+		delete process.env.CLINE_UPDATE_PACKAGE_NAME;
+		const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(
+			new Error("should not fetch"),
+		);
+
+		await expect(checkForUpdates({ includeKanban: false })).resolves.toBe(0);
+
+		expect(fetchSpy).not.toHaveBeenCalled();
+	});
+
 	it("still lets manual update checks run when startup auto update is disabled", async () => {
 		const settingsPath = createTempFile("data/global-settings.json");
 		writeFileSync(settingsPath, JSON.stringify({ autoUpdateEnabled: false }));
 		process.env.CLINE_GLOBAL_SETTINGS_PATH = settingsPath;
+		process.env.CLINE_UPDATE_PACKAGE_NAME = "cline";
 		delete process.env.CLINE_NO_AUTO_UPDATE;
 		const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({
 			ok: true,
@@ -214,7 +266,9 @@ describe("auto update settings", () => {
 
 		await checkForUpdates({ includeKanban: false });
 
-		expect(fetchSpy).toHaveBeenCalled();
+		expect(fetchSpy).toHaveBeenCalledWith(
+			"https://registry.npmjs.org/cline/latest",
+		);
 	});
 });
 
