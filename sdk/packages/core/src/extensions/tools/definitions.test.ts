@@ -891,7 +891,7 @@ describe("default run_commands tool", () => {
 		expect(execute).toHaveBeenNthCalledWith(4, String.raw`Get-ChildItem Assets\Packs`, process.cwd(), expect.anything());
 	});
 
-	it("rejects ambiguous bracketed command strings containing shell operators", async () => {
+	it("rejects ambiguous bracketed command strings containing shell operators outside quoted entries", async () => {
 		const execute = vi.fn(async (command: string) => "ran:" + command);
 		const tool = createShellTool(execute);
 		const context = {
@@ -902,7 +902,7 @@ describe("default run_commands tool", () => {
 		const malformedInputs = [
 			'[ "echo"; echo should-not-run ]',
 			{ commands: '[ "echo"; echo should-not-run ]' },
-			'[ ( "echo"; echo should-not-run ) ]',
+			'[ "echo", (echo; should-not-run) ]',
 		];
 
 		for (const input of malformedInputs) {
