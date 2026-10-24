@@ -134,12 +134,35 @@ export function coalesceOrphanReadRanges(input: unknown): unknown {
 	return input;
 }
 
+/**
+ * A few local models return the whole command list as a JSON-encoded string
+ * instead of an array value, e.g. "[\"Get-ChildItem ..\\Packs\"]". Parse only
+ * that unambiguous array form so its escaped Windows paths are decoded before
+ * execution. Arbitrary shell strings are never split or interpreted as JSON.
+ */
+function parseSerializedCommandArray(value: string): unknown[] | undefined {
+	const trimmed = value.trim();
+	if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+		return undefined;
+	}
+	try {
+		const parsed: unknown = JSON.parse(trimmed);
+		return Array.isArray(parsed) ? parsed : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export function normalizeRunCommandsInput(
 	input: unknown,
 ): Array<string | StructuredCommandInput> {
 	const validate = validateWithZod(RunCommandsInputUnionSchema, input);
 
 	if (typeof validate === "string") {
+		const serializedCommands = parseSerializedCommandArray(validate);
+		if (serializedCommands) {
+			return validateWithZod(RunCommandsInputUnionSchema, serializedCommands);
+		}
 		return [validate];
 	}
 
@@ -148,6 +171,12 @@ export function normalizeRunCommandsInput(
 	}
 
 	if ("commands" in validate) {
+		if (typeof validate.commands === "string") {
+			const serializedCommands = parseSerializedCommandArray(validate.commands);
+			if (serializedCommands) {
+				return validateWithZod(RunCommandsInputUnionSchema, serializedCommands);
+			}
+		}
 		return Array.isArray(validate.commands)
 			? validate.commands
 			: [validate.commands];

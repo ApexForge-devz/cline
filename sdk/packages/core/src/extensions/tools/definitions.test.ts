@@ -662,6 +662,98 @@ describe("default run_commands tool", () => {
 		);
 	});
 
+	it("parses JSON-serialized command arrays before execution", async () => {
+		const execute = vi.fn(async (command: string | { command: string }) =>
+			typeof command === "string" ? `ran:${command}` : `ran:${command.command}`,
+		);
+		const tool = createShellTool(execute);
+		const serializedCommands = JSON.stringify([
+			String.raw`dir ..\Packs`,
+			String.raw`dir Assets\Packs`,
+		]);
+
+		const result = await tool.execute(serializedCommands as never, {
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			iteration: 1,
+		});
+
+		expect(execute).toHaveBeenCalledTimes(2);
+		expect(execute).toHaveBeenNthCalledWith(1, String.raw`dir ..\Packs`, process.cwd(), expect.anything());
+		expect(execute).toHaveBeenNthCalledWith(2, String.raw`dir Assets\Packs`, process.cwd(), expect.anything());
+		expect(result).toEqual([
+			expect.objectContaining({ query: String.raw`dir ..\Packs`, result: `ran:${String.raw`dir ..\Packs`}`, success: true }),
+			expect.objectContaining({ query: String.raw`dir Assets\Packs`, result: `ran:${String.raw`dir Assets\Packs`}`, success: true }),
+		]);
+	});
+
+	it("parses JSON-serialized arrays nested in the commands field", async () => {
+		const execute = vi.fn(async (command: string) => `ran:${command}`);
+		const tool = createShellTool(execute);
+
+		await tool.execute({ commands: '["Get-ChildItem ..\\\\Packs", "Get-ChildItem Assets\\\\Packs"]' } as never, {
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			iteration: 1,
+		});
+
+		expect(execute).toHaveBeenCalledTimes(2);
+		expect(execute).toHaveBeenNthCalledWith(1, String.raw`Get-ChildItem ..\Packs`, process.cwd(), expect.anything());
+		expect(execute).toHaveBeenNthCalledWith(2, String.raw`Get-ChildItem Assets\Packs`, process.cwd(), expect.anything());
+	});
+
+	it("normalizes a JSON-serialized list with Windows backslashes", async () => {
+		const execute = vi.fn(async (command: string) => `ran:${command}`);
+		const tool = createShellTool(execute);
+		const commands = [String.raw`dir ..\Packs`, String.raw`dir Assets\Packs`];
+		const serialized = JSON.stringify(commands);
+
+		const result = await tool.execute(serialized as never, {
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			iteration: 1,
+		});
+
+		expect(execute).toHaveBeenCalledTimes(2);
+		expect(execute).toHaveBeenNthCalledWith(1, commands[0], process.cwd(), expect.anything());
+		expect(execute).toHaveBeenNthCalledWith(2, commands[1], process.cwd(), expect.anything());
+		expect(result).toEqual([
+			expect.objectContaining({ query: commands[0], result: `ran:${commands[0]}`, success: true }),
+			expect.objectContaining({ query: commands[1], result: `ran:${commands[1]}`, success: true }),
+		]);
+	});
+
+	it("normalizes a JSON-serialized list nested under commands", async () => {
+		const execute = vi.fn(async (command: string) => `ran:${command}`);
+		const tool = createShellTool(execute);
+		const commands = [String.raw`Get-ChildItem ..\Packs`, String.raw`Get-ChildItem Assets\Packs`];
+
+		await tool.execute({ commands: JSON.stringify(commands) } as never, {
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			iteration: 1,
+		});
+
+		expect(execute).toHaveBeenCalledTimes(2);
+		expect(execute).toHaveBeenNthCalledWith(1, commands[0], process.cwd(), expect.anything());
+		expect(execute).toHaveBeenNthCalledWith(2, commands[1], process.cwd(), expect.anything());
+	});
+
+	it("does not split ordinary command strings that are not JSON arrays", async () => {
+		const execute = vi.fn(async (command: string) => `ran:${command}`);
+		const tool = createShellTool(execute);
+		const command = `Write-Output "[not a command list]"`;
+
+		await tool.execute(command as never, {
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			iteration: 1,
+		});
+
+		expect(execute).toHaveBeenCalledTimes(1);
+		expect(execute).toHaveBeenCalledWith(command, process.cwd(), expect.anything());
+	});
+
 	it("accepts common single-command aliases", async () => {
 		const execute = vi.fn(
 			async (command: string | { command: string }) =>
