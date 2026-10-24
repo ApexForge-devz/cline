@@ -1,7 +1,9 @@
 ---
-title: "Installing Cline"
-description: "Choose your installation path: IDE Extension, CLI, SDK, or Kanban"
+title: "Installing the ApexForge Fork"
+description: "Build the ApexForge fork from source for desktop, VS Code, CLI, and SDK use."
 ---
+
+> **Fork-specific installation note:** This repository does not publish the official Cline desktop installer, the official VS Code Marketplace extension, or a CLI package under the upstream `cline` npm name. Do not use upstream download or npm instructions for this fork. Build from this repository's `my-local-changes` branch using the steps below.
 
 ## Choose Your Install Path
 
@@ -16,8 +18,8 @@ description: "Choose your installation path: IDE Extension, CLI, SDK, or Kanban"
 Use this if you want Cline outside your editor, as a native desktop app with a dedicated workspace for running and managing agent sessions.
 
 <Steps>
-  <Step title="Download Cline Desktop">
-    Get the installer for your platform from [cline.bot/desktop](https://cline.bot/desktop). Available for macOS and Windows (Windows is currently in beta).
+  <Step title="Build Desktop from source">
+    From the repository root, run `bun install` and `bun run build:sdk`, then follow the [desktop app build guide](https://github.com/ApexForge-devz/cline/blob/my-local-changes/apps/examples/desktop-app/README.md). The fork does not provide a hosted installer or auto-update feed.
   </Step>
   <Step title="Choose a provider and model">
     Select the provider and open weight model of your choice. Cline Desktop is an open source app for open weight models, so you bring your own model access.
@@ -33,66 +35,38 @@ More details: [Cline Desktop](/usage/cline-desktop), and for remote machines [Cl
 
 Use this if you want Cline inside your editor UI.
 
-<Tabs>
-  <Tab title="VS Code / Cursor / Windsurf / VSCodium / Antigravity">
-    <Steps>
-      <Step title="Open Extensions">
-        Press `Ctrl/Cmd + Shift + X`.
-      </Step>
-      <Step title="Search for Cline">
-        Type `Cline`.
-      </Step>
-      <Step title="Install">
-        Click **Install** on the Cline extension.
-      </Step>
-      <Step title="Open Cline">
-        Find Cline in the extension sidebar.
-      </Step>
-      <Step title="Authorize with Cline">
-        After installing the extension, complete provider setup in Cline settings. Use the Cline Provider for pay-as-you-go access, ClinePass for a flat monthly subscription, or bring your own provider key.
+<Note>
+  This fork does not publish a VS Code Marketplace or Open VSX extension. Build the extension from the repository's `apps/vscode` source.
+</Note>
 
-        [Authorize with Cline](/getting-started/authorizing-with-cline)
-      </Step>
-    </Steps>
+<Steps>
+  <Step title="Install repository dependencies">
+    From the repository root, run `bun install` and `bun run build:sdk`.
+  </Step>
+  <Step title="Start the extension development build">
+    Run `bun install` and `bun run dev` from `apps/vscode`.
+  </Step>
+  <Step title="Launch it locally">
+    Open the repository in VS Code, open `apps/vscode`, and press **F5** to launch the Extension Development Host.
+  </Step>
+</Steps>
 
-    <Note>
-    Windsurf and VSCodium use Open VSX. The install flow is the same.
-    </Note>
-  </Tab>
-
-  <Tab title="JetBrains">
-    <Steps>
-      <Step title="Open Plugins Marketplace">
-        **Settings** → **Plugins** → **Marketplace**.
-      </Step>
-      <Step title="Install Cline">
-        Search `Cline`, click **Install**, then restart the IDE.
-      </Step>
-      <Step title="Open Cline">
-        **View** → **Tool Windows** → **Cline**.
-      </Step>
-      <Step title="Authorize with Cline">
-        After installing the extension, complete provider setup in Cline settings. Use the Cline Provider for pay-as-you-go access, ClinePass for a flat monthly subscription, or bring your own provider key.
-
-        [Authorize with Cline](/getting-started/authorizing-with-cline)
-      </Step>
-    </Steps>
-
-    Alternative: install from the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/28247-cline).
-  </Tab>
-</Tabs>
+This fork does not provide a JetBrains Marketplace release.
 
 ## CLI
 
 Use this if you want Cline in terminal workflows (interactive + automation).
 
 <Steps>
-  <Step title="Install Node.js">
-    Install Node.js 20+ (22 recommended).
+  <Step title="Install Bun">
+    Install Bun, then clone this repository's `my-local-changes` branch.
   </Step>
-  <Step title="Install CLI">
+  <Step title="Build and run the CLI">
+    From the repository root, run:
     ```bash
-    npm install -g cline
+    bun install
+    bun run build:sdk
+    bun run cli
     ```
   </Step>
   <Step title="Authenticate">
@@ -100,11 +74,10 @@ Use this if you want Cline in terminal workflows (interactive + automation).
     cline auth
     ```
   </Step>
-  <Step title="Run Cline">
+  <Step title="Run a task">
     ```bash
-    cline
-    # or
-    cline "your task"
+    bun run cli
+    bun run cli -- "your task"
     ```
   </Step>
 </Steps>
@@ -139,13 +112,11 @@ Use this if you are building your own app/agent on top of Cline.
     npm init -y
     ```
   </Step>
-  <Step title="Install SDK">
-    ```bash
-    npm install @cline/sdk
-    ```
+  <Step title="Build SDK packages from source">
+    The fork does not publish the upstream `@cline/sdk` npm package. From the repository root, run `bun install` and `bun run build:sdk`.
   </Step>
-  <Step title="Build and run">
-    Browse SDK examples to run your first agent.
+  <Step title="Run an example">
+    Browse the fork's [SDK examples](https://github.com/ApexForge-devz/cline/tree/my-local-changes/sdk/examples) and use the workspace packages locally.
   </Step>
 </Steps>
 
