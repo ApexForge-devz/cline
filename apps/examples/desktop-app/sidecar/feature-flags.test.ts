@@ -162,6 +162,7 @@ describe("feature flags context", () => {
 	});
 
 	it("switches to the account ID once signed in, and pushes it to the service", () => {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = "1";
 		process.env.TELEMETRY_SERVICE_API_KEY = "phc_key";
 		getDesktopFeatureFlagsService();
 		setDesktopFeatureFlagsAccountContext({
@@ -334,6 +335,7 @@ describe("refreshDesktopFeatureFlags", () => {
 
 describe("disposeDesktopFeatureFlagsService", () => {
 	it("disposes the live service and clears it", async () => {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = "1";
 		process.env.TELEMETRY_SERVICE_API_KEY = "phc_key";
 		getDesktopFeatureFlagsService();
 		await disposeDesktopFeatureFlagsService();

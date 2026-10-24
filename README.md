@@ -127,6 +127,12 @@ See the [fork's SDK overview](https://github.com/ApexForge-devz/cline/blob/my-lo
 
 ---
 
+## Local-first operation
+
+This fork defaults to local runtime and keeps Cline-hosted cloud services disabled unless `CLINE_ENABLE_CLOUD_SERVICES=1` is explicitly set. By default, Cline account sign-in, organization-managed remote configuration, Cline-hosted account feature flags/connectors, and cloud sessions are disabled. This does **not** disable provider requests you configure directly, including local Ollama or NVIDIA API endpoints.
+
+For regular local-first use, leave `CLINE_ENABLE_CLOUD_SERVICES` unset. Set it to `1` only when intentionally testing the inherited Cline-hosted integrations.
+
 ## Index
 
 | Product | Description | Location | CHANGELOG |
