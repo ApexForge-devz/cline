@@ -20,7 +20,7 @@ import {
 	buildClinePostHogClient,
 	PostHogFeatureFlagsProvider,
 } from "@cline/core/services/feature-flags/posthog";
-import { FeatureFlag as SharedFeatureFlag } from "@cline/shared";
+import { FeatureFlag as SharedFeatureFlag, isClineCloudServicesEnabled } from "@cline/shared";
 import { resolveClineDataDir } from "@cline/shared/storage";
 import { readDesktopSettings } from "./desktop-settings";
 
@@ -138,6 +138,7 @@ export function getDesktopFeatureFlagsService(options?: {
 	if (!desktopFeatureFlagsService) {
 		const apiKey = process.env.TELEMETRY_SERVICE_API_KEY;
 		const provider =
+			isClineCloudServicesEnabled() &&
 			apiKey &&
 			process.env.IS_TEST !== "true" &&
 			process.env.E2E_TEST !== "true"
@@ -287,6 +288,7 @@ export function isCloudAgentsAvailable(options?: {
 	logger?: BasicLogger;
 	telemetry?: ITelemetryService;
 }): boolean {
+	if (!isClineCloudServicesEnabled()) return false
 	const override = readCloudAgentsEnvOverride();
 	if (override !== undefined) return override;
 	return getDesktopFeatureFlagsService(options).getBooleanFlagEnabled(
@@ -299,6 +301,7 @@ export function isCloudAgentsEnabled(options?: {
 	logger?: BasicLogger;
 	telemetry?: ITelemetryService;
 }): boolean {
+	if (!isClineCloudServicesEnabled()) return false
 	const override = readCloudAgentsEnvOverride();
 	if (override !== undefined) return override;
 	if (!isCloudAgentsAvailable(options)) return false;

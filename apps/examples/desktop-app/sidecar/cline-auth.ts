@@ -6,7 +6,7 @@ import {
 	RuntimeOAuthTokenManager,
 } from "@cline/core";
 import type { BasicLogger, ITelemetryService } from "@cline/shared";
-import { getClineEnvironmentConfig } from "@cline/shared";
+import { getClineEnvironmentConfig, isClineCloudServicesEnabled } from "@cline/shared";
 
 /**
  * Shared Cline-account auth for the sidecar: one refresh-aware OAuth manager
@@ -30,6 +30,7 @@ export async function resolveFreshClineAuthToken(
 	manager: ProviderSettingsManager,
 	ctx: ClineAuthTelemetryContext = {},
 ): Promise<string | undefined> {
+	if (!isClineCloudServicesEnabled()) return undefined
 	let refreshError: Error | undefined;
 	try {
 		clineOAuthTokenManager ??= new RuntimeOAuthTokenManager();
@@ -76,6 +77,7 @@ export async function resolveFreshClineAuthToken(
  * no-await state-mutation windows the connector lifecycle relies on.
  */
 export function getClineAccountId(): string | undefined {
+	if (!isClineCloudServicesEnabled()) return undefined
 	const accountId = new ProviderSettingsManager()
 		.getProviderSettings("cline")
 		?.auth?.accountId?.trim();

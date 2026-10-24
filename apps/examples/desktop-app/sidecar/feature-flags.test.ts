@@ -66,6 +66,7 @@ import {
 
 const originalApiKey = process.env.TELEMETRY_SERVICE_API_KEY;
 const originalIsTest = process.env.IS_TEST;
+const originalCloudServices = process.env.CLINE_ENABLE_CLOUD_SERVICES;
 const originalDataDir = process.env.CLINE_DATA_DIR;
 let tempDataDir: string;
 
@@ -79,12 +80,18 @@ beforeEach(() => {
 	resetDesktopFeatureFlagsForTesting();
 	delete process.env.IS_TEST;
 	delete process.env.E2E_TEST;
+	delete process.env.CLINE_ENABLE_CLOUD_SERVICES;
 	// Account context persists under the data dir; sandbox it per test.
 	tempDataDir = mkdtempSync(join(tmpdir(), "desktop-ff-test-"));
 	process.env.CLINE_DATA_DIR = tempDataDir;
 });
 
 afterEach(() => {
+	if (originalCloudServices === undefined) {
+		delete process.env.CLINE_ENABLE_CLOUD_SERVICES;
+	} else {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = originalCloudServices;
+	}
 	if (originalApiKey === undefined) {
 		delete process.env.TELEMETRY_SERVICE_API_KEY;
 	} else {
@@ -104,12 +111,21 @@ afterEach(() => {
 });
 
 describe("getDesktopFeatureFlagsService", () => {
-	it("uses PostHog when the build-time key is inlined", () => {
+	it("uses PostHog only when cloud services are explicitly enabled", () => {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = "1";
 		process.env.TELEMETRY_SERVICE_API_KEY = "phc_key";
 		getDesktopFeatureFlagsService();
 		expect(mocks.PostHogFeatureFlagsProvider).toHaveBeenCalledTimes(1);
 		expect(mocks.buildClinePostHogClient).toHaveBeenCalledWith("phc_key");
 		expect(mocks.NoOpFeatureFlagsProvider).not.toHaveBeenCalled();
+	});
+
+	it("does not initialize PostHog when cloud services are disabled, even with a key", () => {
+		process.env.TELEMETRY_SERVICE_API_KEY = "phc_key";
+		getDesktopFeatureFlagsService();
+		expect(mocks.NoOpFeatureFlagsProvider).toHaveBeenCalledTimes(1);
+		expect(mocks.PostHogFeatureFlagsProvider).not.toHaveBeenCalled();
+		expect(mocks.buildClinePostHogClient).not.toHaveBeenCalled();
 	});
 
 	it("falls back to the no-op provider when no key was inlined", () => {
@@ -120,6 +136,7 @@ describe("getDesktopFeatureFlagsService", () => {
 	});
 
 	it("never calls PostHog under IS_TEST even with a key present", () => {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = "1";
 		process.env.TELEMETRY_SERVICE_API_KEY = "phc_key";
 		process.env.IS_TEST = "true";
 		getDesktopFeatureFlagsService();
@@ -128,6 +145,7 @@ describe("getDesktopFeatureFlagsService", () => {
 	});
 
 	it("returns one shared instance so the core and the webview agree", () => {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = "1";
 		process.env.TELEMETRY_SERVICE_API_KEY = "phc_key";
 		expect(getDesktopFeatureFlagsService()).toBe(
 			getDesktopFeatureFlagsService(),
@@ -346,6 +364,7 @@ describe("cloud agents gate", () => {
 	});
 
 	it("does not enable a boolean rollout from a truthy variant payload", async () => {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = "1";
 		const { isCloudAgentsAvailable } = await import("./feature-flags");
 		mocks.getFlagPayload.mockReturnValue("control");
 		expect(isCloudAgentsAvailable()).toBe(false);
@@ -355,6 +374,7 @@ describe("cloud agents gate", () => {
 	});
 
 	it("needs both the rollout flag and the user's opt-in to enable", async () => {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = "1";
 		const { isCloudAgentsEnabled, isCloudAgentsAvailable } = await import(
 			"./feature-flags"
 		);
@@ -369,7 +389,8 @@ describe("cloud agents gate", () => {
 		expect(isCloudAgentsEnabled()).toBe(true);
 	});
 
-	it("lets the env override force the gate in both directions", async () => {
+	it("lets the env override force the gate in both directions only after cloud opt-in", async () => {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = "1";
 		const { isCloudAgentsEnabled, isCloudAgentsAvailable } = await import(
 			"./feature-flags"
 		);

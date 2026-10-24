@@ -875,6 +875,9 @@ export class AuthService {
 	 * This is called when the browser redirects back to the extension after OAuth.
 	 */
 	async handleAuthCallback(authorizationCode: string, provider: string): Promise<void> {
+		if (!isClineCloudServicesEnabled()) {
+			throw new Error("Cline cloud services are disabled; ignoring account authentication callback.")
+		}
 		try {
 			// Exchange the authorization code for tokens using the Cline API
 			const apiBaseUrl = ClineEnv.config().apiBaseUrl
