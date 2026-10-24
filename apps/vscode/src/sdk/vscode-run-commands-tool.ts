@@ -270,8 +270,12 @@ export async function executeForeground(
 	abortSignal?: AbortSignal,
 	foregroundCommands?: SdkForegroundCommandCoordinator,
 	terminalProfileId?: string,
+	shellPathOverride?: string,
 ): Promise<string> {
-	const shellPath = getShellForProfile(terminalProfileId ?? "default")
+	// The resolved shell executable is captured alongside the profile ID at
+	// model-request time. Prefer that snapshot so profile configuration changes
+	// cannot make formatting disagree with the shell described to the model.
+	const shellPath = shellPathOverride ?? getShellForProfile(terminalProfileId ?? "default")
 	const terminalCommand = formatCommandForTerminal(command, shellPath)
 
 	// "Proceed While Running": register a per-invocation handle so the user can
@@ -646,6 +650,7 @@ function createVscodeShellExecutor(options: VscodeRunCommandsToolOptions, state:
 			context.signal,
 			options.foregroundCommands,
 			profileId,
+			shell,
 		)
 	}
 }

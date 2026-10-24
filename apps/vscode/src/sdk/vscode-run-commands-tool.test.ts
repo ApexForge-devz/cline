@@ -372,6 +372,31 @@ describe("formatCommandForTerminal", () => {
 })
 
 describe("executeForeground", () => {
+	it("formats structured commands with the captured shell executable", async () => {
+		const fakeProcess = createFakeTerminalProcess({ lines: ["ok"] });
+		let terminalCommand = "";
+		const terminalManager = {
+			getOrCreateTerminal: async () => ({ terminal: { show: () => {} } }) as never,
+			runCommand: (_terminal: unknown, command: string) => {
+				terminalCommand = command;
+				return fakeProcess;
+			},
+		} as unknown as VscodeTerminalManager;
+
+		await executeForeground(
+			{ command: "tool.exe", args: ["hello world"] },
+			"/workspace",
+			terminalManager,
+			1000,
+			undefined,
+			undefined,
+			"profile-that-may-now-resolve-differently",
+			"cmd.exe",
+		);
+
+		expect(terminalCommand).toBe('tool.exe "hello world"');
+	});
+
 	it("returns output as-is on success (no exit code captured)", async () => {
 		const process = createFakeTerminalProcess({ lines: ["hello"] })
 		const terminalManager = createFakeTerminalManager(process)
