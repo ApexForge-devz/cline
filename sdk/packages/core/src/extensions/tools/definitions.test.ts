@@ -791,6 +791,21 @@ describe("default run_commands tool", () => {
 		]);
 	});
 
+	it("normalizes a serialized tool object before executing its command array", async () => {
+		const execute = vi.fn(async (command: string) => "ran:" + command);
+		const tool = createShellTool(execute);
+		const serializedInput = JSON.stringify({
+			commands: '[ "echo one", "echo two" ]',
+		});
+
+		await tool.execute(serializedInput as never, {
+			agentId: "agent-1",
+			conversationId: "conv-1",
+			iteration: 1,
+		});
+
+		expect(execute.mock.calls.map(([command]) => command)).toEqual(["echo one", "echo two"]);
+	});
 	it("normalizes serialized args inside structured commands before execution", async () => {
 		const execute = vi.fn(async (command: string | { command: string; args?: string[] }) =>
 			typeof command === "string" ? command : [command.command, ...(command.args ?? [])].join("|"),
