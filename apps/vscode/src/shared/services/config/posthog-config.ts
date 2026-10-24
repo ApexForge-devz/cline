@@ -45,6 +45,23 @@ export const posthogConfig: PostHogClientConfig = {
 
 const isTestEnv = process.env.E2E_TEST === "true" || process.env.IS_TEST === "true"
 
+/**
+ * PostHog clients must use an explicitly configured HTTP(S) endpoint.
+ * An empty host can make SDKs fall back to their public default collector.
+ */
+export function hasExplicitPostHogHost(host: unknown): host is string {
+	if (typeof host !== "string" || !host.trim()) {
+		return false
+	}
+
+	try {
+		const url = new URL(host.trim())
+		return (url.protocol === "http:" || url.protocol === "https:") && url.hostname.length > 0
+	} catch {
+		return false
+	}
+}
+
 export function isPostHogConfigValid(config: PostHogClientConfig): config is PostHogClientValidConfig {
 	// Allow invalid config in test environment to enable mocking and stubbing
 	if (isTestEnv) {
@@ -52,8 +69,10 @@ export function isPostHogConfigValid(config: PostHogClientConfig): config is Pos
 	}
 	return (
 		typeof config.apiKey === "string" &&
+		config.apiKey.trim().length > 0 &&
 		typeof config.errorTrackingApiKey === "string" &&
-		typeof config.host === "string" &&
-		typeof config.uiHost === "string"
+		config.errorTrackingApiKey.trim().length > 0 &&
+		hasExplicitPostHogHost(config.host) &&
+		hasExplicitPostHogHost(config.uiHost)
 	)
 }

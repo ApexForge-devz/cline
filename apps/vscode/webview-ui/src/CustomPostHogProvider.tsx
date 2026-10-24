@@ -1,4 +1,4 @@
-import { posthogConfig } from "@shared/services/config/posthog-config"
+import { hasExplicitPostHogHost, posthogConfig } from "@shared/services/config/posthog-config"
 import posthog from "posthog-js"
 import { PostHogProvider } from "posthog-js/react"
 import { type ReactNode, useEffect, useState } from "react"
@@ -14,11 +14,10 @@ export function CustomPostHogProvider({ children }: { children: ReactNode }) {
 	const [isActive, setIsActive] = useState(false)
 
 	useEffect(() => {
-		if (isSelfHostedOrUnknown || isActive || !posthogConfig.apiKey) {
+		const apiKey = posthogConfig.apiKey?.trim()
+		if (isSelfHostedOrUnknown || isActive || !apiKey || !hasExplicitPostHogHost(posthogConfig.host)) {
 			return
 		}
-		// At this point, we know apiKey is defined due to the check above
-		const apiKey = posthogConfig.apiKey as string
 		posthog.init(apiKey, {
 			api_host: posthogConfig.host,
 			ui_host: posthogConfig.uiHost,
