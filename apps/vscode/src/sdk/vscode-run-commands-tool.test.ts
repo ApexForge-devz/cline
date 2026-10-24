@@ -347,6 +347,19 @@ describe("formatCommandForTerminal", () => {
 		)
 	})
 
+	it("doubles backslashes before embedded quotes and at the end of cmd.exe args", () => {
+		const arg = "folder" + "\\" + '"' + "name" + "\\";
+		expect(formatCommandForTerminal({ command: "tool.exe", args: [arg] }, "cmd.exe")).toBe(
+			'tool.exe "folder' + "\\".repeat(3) + '"name' + "\\".repeat(2) + '"',
+		)
+	})
+
+	it("rejects cmd.exe arguments that would be expanded by the shell", () => {
+		expect(() => formatCommandForTerminal({ command: "tool.exe", args: ["%PATH%"] }, "cmd.exe")).toThrow(
+			/cmd\.exe may expand %NAME% or !NAME!/,
+		)
+	})
+
 	it("escapes embedded quotes when formatting cmd.exe arguments", () => {
 		expect(formatCommandForTerminal({ command: "tool.exe", args: ['a"b'] }, "cmd.exe")).toBe('tool.exe "a\\"b"')
 	})

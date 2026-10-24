@@ -98,11 +98,32 @@ function quotePowerShellArg(arg: string): string {
 
 function quoteCmdArg(arg: string): string {
 	if (arg.length === 0) return '""'
+	if (/%[^%\s]+%|![^!\r\n]+!/.test(arg)) {
+		throw new Error(
+			"cmd.exe may expand %NAME% or !NAME! even inside quotes; use PowerShell or WSL to pass these values literally.",
+		)
+	}
 	const needsQuotes = [...arg].some((character) => !/[A-Za-z0-9_./:@+=,-]/.test(character))
 	if (!needsQuotes) return arg
-	// Double quotes group arguments in cmd.exe; preserve embedded quotes and trailing backslashes.
-	const escaped = arg.replace(/"/g, "\\" + '"' ).replace(/\\+$/, (slashes) => slashes + slashes)
-	return '"' + escaped + '"'
+	// Quote according to the Windows argv rules: backslashes before embedded
+	// quotes and at the end of a quoted argument must be doubled.
+	let escaped = '"'
+	let backslashes = 0
+	for (const character of arg) {
+		if (character === "\\") {
+			backslashes += 1
+			continue
+		}
+		if (character === '"' ) {
+			escaped += "\\".repeat(backslashes * 2 + 1) + '"'
+			backslashes = 0
+			continue
+		}
+		escaped += "\\".repeat(backslashes) + character
+		backslashes = 0
+	}
+	escaped += "\\".repeat(backslashes * 2) + '"'
+	return escaped
 }
 
 export function formatCommandForTerminal(command: ShellCommand, shellPath?: string): string {
