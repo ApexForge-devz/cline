@@ -31,6 +31,7 @@ import {
 	getEditorSizeError,
 	getReadFileRangeError,
 	normalizeRunCommandsInput,
+	normalizeSerializedArrayInputs,
 	TimeoutError,
 	withTimeout,
 } from "./helpers";
@@ -284,9 +285,14 @@ export function createReadFilesTool(
 		retryable: true,
 		maxRetries: 1,
 		execute: async (input, context) => {
+			const normalizedInput = normalizeSerializedArrayInputs(
+				input,
+				["files", "file_paths", "paths"],
+				"file-read",
+			);
 			const validate = validateWithZod(
 				ReadFilesInputUnionSchema,
-				coalesceOrphanReadRanges(input),
+				coalesceOrphanReadRanges(normalizedInput),
 			);
 			let requests: ReadFileRequest[];
 			if (typeof validate === "string") {
@@ -381,7 +387,12 @@ export function createSearchTool(
 		maxRetries: 1,
 		execute: async (input, context) => {
 			// Validate input with Zod schema
-			const validate = validateWithZod(SearchCodebaseUnionInputSchema, input);
+			const normalizedInput = normalizeSerializedArrayInputs(
+				input,
+				["queries"],
+				"search query",
+			);
+			const validate = validateWithZod(SearchCodebaseUnionInputSchema, normalizedInput);
 			const queries = Array.isArray(validate)
 				? validate
 				: typeof validate === "object"

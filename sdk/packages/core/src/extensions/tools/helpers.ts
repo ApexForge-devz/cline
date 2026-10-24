@@ -135,46 +135,81 @@ export function coalesceOrphanReadRanges(input: unknown): unknown {
 }
 
 /**
- * Parse a model-emitted JSON-encoded command array. Use the shared repair
- * parser for common wire-format errors such as unescaped Windows path
- * separators, but only inspect values that are already array-shaped.
- *
- * If an array-shaped string appears to be a serialized list but cannot be
- * recovered, fail closed rather than executing the entire JSON payload as a
- * shell command.
+ * Parse JSON-encoded arrays emitted as strings by some local models.
+ * Repair malformed quoting/backslashes only when the input already resembles
+ * an array of JSON strings or objects. This avoids interpreting shell bracket
+ * expressions such as `[A-Z]` or `[ -d path ]` as tool argument arrays.
  */
-function parseSerializedCommandArray(value: string): unknown[] | undefined {
+function parseSerializedArrayInput(value: string, description: string): unknown[] | undefined {
 	const trimmed = value.trim();
-	if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
+	if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return undefined;
+
+	try {
+		const parsed: unknown = JSON.parse(trimmed);
+		return Array.isArray(parsed) ? parsed : undefined;
+	} catch {
+		// Continue only for a JSON-looking array; ordinary shell/regex bracket
+		// expressions remain plain strings.
+	}
+
+	const firstEntry = trimmed.slice(1).trimStart()[0];
+	if (firstEntry !== '"' && firstEntry !== "'" && firstEntry !== "{") {
 		return undefined;
 	}
 
-	const parsed = parseJsonStream(trimmed);
-	if (Array.isArray(parsed)) {
-		return parsed;
+	const repaired = parseJsonStream(trimmed);
+	if (Array.isArray(repaired)) return repaired;
+	throw new Error(
+		`Could not parse the serialized ${description} array. Send an array value, or escape backslashes in JSON strings (for example, \\\\).`,
+	);
+}
+
+/**
+ * Recover JSON-encoded array inputs at the top level and in named array fields.
+ * Plain strings remain untouched so paths, regexes, and shell commands are not
+ * reinterpreted unless they clearly look like serialized arrays.
+ */
+export function normalizeSerializedArrayInputs(
+	input: unknown,
+	arrayFields: readonly string[],
+	description: string,
+): unknown {
+	if (typeof input === "string") {
+		const trimmed = input.trim();
+		if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+			const parsed = parseJsonStream(trimmed);
+			if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+				return normalizeSerializedArrayInputs(parsed, arrayFields, description);
+			}
+		}
+		return parseSerializedArrayInput(input, description) ?? input;
 	}
 
-	// Preserve ordinary shell test expressions such as `[ -d path ]`, while
-	// rejecting JSON-looking string/object arrays that failed recovery.
-	const firstEntry = trimmed.slice(1).trimStart()[0];
-	if (firstEntry === '"' || firstEntry === "'" || firstEntry === "{") {
-		throw new Error(
-			"Could not parse the serialized command array. Send commands as an array, or escape backslashes in JSON strings (for example, \\\\).",
-		);
+	if (input === null || typeof input !== "object" || Array.isArray(input)) {
+		return input;
 	}
-	return undefined;
+
+	let changed = false;
+	const normalized: Record<string, unknown> = { ...(input as Record<string, unknown>) };
+	for (const field of arrayFields) {
+		const value = normalized[field];
+		if (typeof value !== "string") continue;
+		const parsed = parseSerializedArrayInput(value, description);
+		if (parsed) {
+			normalized[field] = parsed;
+			changed = true;
+		}
+	}
+	return changed ? normalized : input;
 }
 
 export function normalizeRunCommandsInput(
 	input: unknown,
 ): Array<string | StructuredCommandInput> {
-	const validate = validateWithZod(RunCommandsInputUnionSchema, input);
+	const normalizedInput = normalizeSerializedArrayInputs(input, ["commands"], "command");
+	const validate = validateWithZod(RunCommandsInputUnionSchema, normalizedInput);
 
 	if (typeof validate === "string") {
-		const serializedCommands = parseSerializedCommandArray(validate);
-		if (serializedCommands) {
-			return validateWithZod(RunCommandsInputUnionSchema, serializedCommands);
-		}
 		return [validate];
 	}
 
@@ -183,12 +218,6 @@ export function normalizeRunCommandsInput(
 	}
 
 	if ("commands" in validate) {
-		if (typeof validate.commands === "string") {
-			const serializedCommands = parseSerializedCommandArray(validate.commands);
-			if (serializedCommands) {
-				return validateWithZod(RunCommandsInputUnionSchema, serializedCommands);
-			}
-		}
 		return Array.isArray(validate.commands)
 			? validate.commands
 			: [validate.commands];

@@ -385,6 +385,23 @@ describe("default search_codebase tool", () => {
 		]);
 	});
 
+	it("normalizes JSON-serialized query arrays but preserves regex character classes", async () => {
+		const execute = vi.fn(async (query: string) => `matches:${query}`);
+		const tool = createSearchTool(execute);
+		await tool.execute(String.raw`["Player", "[A-Z]"]` as never, {
+			agentId: "agent-1", conversationId: "conv-1", iteration: 1,
+		});
+		await tool.execute({ queries: '["Health", "Transform"]' } as never, {
+			agentId: "agent-1", conversationId: "conv-1", iteration: 2,
+		});
+		await tool.execute({ queries: "[A-Z]" } as never, {
+			agentId: "agent-1", conversationId: "conv-1", iteration: 3,
+		});
+		expect(execute.mock.calls.map(([query]) => query)).toEqual([
+			"Player", "[A-Z]", "Health", "Transform", "[A-Z]",
+		]);
+	});
+
 	it("treats executor errors as failures", async () => {
 		const execute = vi.fn(async () => {
 			throw new Error("bad regex");
@@ -1563,6 +1580,22 @@ describe("default read_files tool", () => {
 				iteration: 1,
 			}),
 		);
+	});
+
+	it("normalizes JSON-serialized file path arrays including Windows backslashes", async () => {
+		const execute = vi.fn(async (request: { path: string }) => `content:${request.path}`);
+		const tool = createReadFilesTool(execute);
+		const serialized = String.raw`["C:\Packs\a.ts", "C:\Packs\b.ts"]`;
+		await tool.execute(serialized as never, {
+			agentId: "agent-1", conversationId: "conv-1", iteration: 1,
+		});
+		await tool.execute({ files: serialized } as never, {
+			agentId: "agent-1", conversationId: "conv-1", iteration: 2,
+		});
+		expect(execute.mock.calls.map(([request]) => request.path)).toEqual([
+			String.raw`C:\Packs\a.ts`, String.raw`C:\Packs\b.ts`,
+			String.raw`C:\Packs\a.ts`, String.raw`C:\Packs\b.ts`,
+		]);
 	});
 
 	it("accepts string union inputs reading full file content", async () => {
