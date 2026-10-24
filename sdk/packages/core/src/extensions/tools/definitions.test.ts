@@ -912,6 +912,21 @@ describe("default run_commands tool", () => {
 		expect(execute).not.toHaveBeenCalled();
 	});
 
+	it("allows shell operators inside valid serialized command strings", async () => {
+		const execute = vi.fn(async (command: string) => "ran:" + command);
+		const tool = createShellTool(execute);
+		await tool.execute({ commands: '["echo one; echo two", "pwd"]' } as never, {
+			agentId: "agent-1",
+			conversationId: "conversation-1",
+			iteration: 1,
+		});
+
+		expect(execute.mock.calls.map(([command]) => command)).toEqual([
+			"echo one; echo two",
+			"pwd",
+		]);
+	});
+
 	it("preserves shell tests in commands fields while normalizing structured args", async () => {
 		const execute = vi.fn(
 			async (command: string | { command: string; args?: string[] }) =>
