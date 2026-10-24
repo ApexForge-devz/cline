@@ -197,7 +197,7 @@ export function withMinimumReleaseAgeBypass(
 }
 
 async function getLatestVersion(
-	packageName: CliPackageName,
+	packageName: string,
 	currentVersion: string,
 ): Promise<string | null> {
 	const tag = getNpmTag(currentVersion);
