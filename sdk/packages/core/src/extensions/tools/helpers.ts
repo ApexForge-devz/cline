@@ -241,19 +241,9 @@ function parseSerializedArrayInput(
 	const trimmed = value.trim();
 	if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) return undefined;
 
-	// A bracketed command with shell operators outside quoted text is not a
-	// safely recoverable serialized list. Check before inspecting the first
-	// entry so grouped expressions such as [(echo; command)] are not missed.
-	const hasShellOperator = hasTopLevelShellOperator(trimmed);
-	if (description === "command" && hasShellOperator) {
-		throw new Error(
-			"Could not safely interpret bracketed command input containing shell operators outside quoted entries. Pass commands as a valid JSON array or a plain shell command.",
-		);
-	}
-
 	// Ignore whitespace after '[' while inspecting the first token, but don't
-	// confuse a shell test such as [ "value" ] with a serialized one-item
-	// array when there is no field schema to disambiguate it.
+	// confuse shell expressions such as [[ $value == a || $value == b ]] with
+	// serialized arrays.
 	const inner = trimmed.slice(1, -1).trimStart();
 	if (inner.length === 0) {
 		// An empty list is unambiguous when parsing a schema-declared array
@@ -264,6 +254,16 @@ function parseSerializedArrayInput(
 	if (firstEntry !== '"' && firstEntry !== "'" && firstEntry !== "{") {
 		return undefined;
 	}
+
+	// Once the string has an array-like opening token, shell operators outside
+	// quoted entries make it ambiguous and unsafe to recover as a command list.
+	const hasShellOperator = hasTopLevelShellOperator(trimmed);
+	if (description === "command" && hasShellOperator) {
+		throw new Error(
+			"Could not safely interpret bracketed command input containing shell operators outside quoted entries. Pass commands as a valid JSON array or a plain shell command.",
+		);
+	}
+
 	const hasSeparator = hasTopLevelArraySeparator(trimmed);
 	const hasWhitespaceAfterOpeningBracket = /^\[\s+/.test(trimmed);
 	if (
