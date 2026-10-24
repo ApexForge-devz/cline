@@ -6,13 +6,17 @@ import {
 	createEditorTool,
 	createReadFilesTool,
 	createSearchTool,
-	createWebFetchTool,
 	createShellTool,
 	createSkillsTool,
+	createWebFetchTool,
 } from "./definitions";
 import { CommandExitError } from "./executors/bash";
 import { RUN_COMMAND_QUERY_PREVIEW_LIMIT, TimeoutError } from "./helpers";
-import { type EditFileInput, INPUT_ARG_CHAR_LIMIT, StructuredCommandInputSchema } from "./schemas";
+import {
+	type EditFileInput,
+	INPUT_ARG_CHAR_LIMIT,
+	StructuredCommandInputSchema,
+} from "./schemas";
 import type { SkillsExecutorWithMetadata } from "./types";
 
 function hasSchemaKey(value: unknown, key: string): boolean {
@@ -220,12 +224,19 @@ describe("default ask_question tool", () => {
 		}).find((candidate) => candidate.name === "ask_question");
 		if (!tool) throw new Error("Expected ask_question tool to be defined.");
 
-		await expect(tool.execute({
-			question: "Choose an option",
-			options: '[ "Option 1", "Option 2" ]',
-		} as never, {
-			agentId: "agent-1", conversationId: "conv-1", iteration: 1,
-		})).resolves.toBe("Option 2");
+		await expect(
+			tool.execute(
+				{
+					question: "Choose an option",
+					options: '[ "Option 1", "Option 2" ]',
+				} as never,
+				{
+					agentId: "agent-1",
+					conversationId: "conv-1",
+					iteration: 1,
+				},
+			),
+		).resolves.toBe("Option 2");
 		expect(execute).toHaveBeenCalledWith(
 			"Choose an option",
 			["Option 1", "Option 2"],
@@ -298,7 +309,9 @@ describe("default ask_question tool", () => {
 
 describe("default fetch_web_content tool", () => {
 	it("normalizes JSON-serialized request arrays before validation", async () => {
-		const execute = vi.fn(async (url: string, prompt: string) => `${prompt}: ${url}`);
+		const execute = vi.fn(
+			async (url: string, prompt: string) => `${prompt}: ${url}`,
+		);
 		const tool = createWebFetchTool(execute);
 		const result = await tool.execute({
 			requests: '[ { "url": "https://example.com/docs", "prompt": "Summarize this page" } ]',
@@ -312,11 +325,13 @@ describe("default fetch_web_content tool", () => {
 			"Summarize this page",
 			expect.anything(),
 		);
-		expect(result).toEqual([{
-			query: "https://example.com/docs",
-			result: "Summarize this page: https://example.com/docs",
-			success: true,
-		}]);
+		expect(result).toEqual([
+			{
+				query: "https://example.com/docs",
+				result: "Summarize this page: https://example.com/docs",
+				success: true,
+			},
+		]);
 	});
 });
 

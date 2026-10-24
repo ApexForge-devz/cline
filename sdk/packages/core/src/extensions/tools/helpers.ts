@@ -237,9 +237,8 @@ function parseSerializedArrayInput(
 }
 
 /**
- * Recover JSON-encoded array inputs at the top level and in named array fields.
- * Plain strings remain untouched so paths, regexes, and shell commands are not
- * reinterpreted unless they clearly look like serialized arrays.
+ * Recover JSON-encoded arrays at the top level and in named fields, including
+ * nested object entries. Plain command strings and regex patterns remain intact.
  */
 function normalizeParsedArrayEntries(
 	entries: unknown[],
@@ -277,7 +276,11 @@ export function normalizeSerializedArrayInputs(
 		}
 		const parsedArray = parseSerializedArrayInput(input, description);
 		return parsedArray
-			? normalizeParsedArrayEntries(parsedArray, arrayFields, description)
+			? normalizeParsedArrayEntries(
+					parsedArray,
+					arrayFields,
+					description,
+				)
 			: input;
 	}
 
@@ -317,7 +320,11 @@ export function normalizeSerializedArrayInputs(
 export function normalizeRunCommandsInput(
 	input: unknown,
 ): Array<string | StructuredCommandInput> {
-	const normalizedInput = normalizeSerializedArrayInputs(input, ["commands", "args"], "command");
+	const normalizedInput = normalizeSerializedArrayInputs(
+		input,
+		["commands", "args"],
+		"command",
+	);
 	const validate = validateWithZod(RunCommandsInputUnionSchema, normalizedInput);
 
 	if (typeof validate === "string") {

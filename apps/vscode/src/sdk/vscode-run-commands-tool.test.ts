@@ -355,9 +355,10 @@ describe("formatCommandForTerminal", () => {
 			{ command: process.execPath, args: ["-e", script, ...args] },
 			"C:\\Windows\\System32\\cmd.exe",
 		)
-		const output = execFileSync("cmd.exe", ["/d", "/c", command], {
+		const output = execFileSync("cmd.exe", ["/d", "/s", "/c", `"${command}"`], {
 			encoding: "utf8",
 			windowsHide: true,
+			windowsVerbatimArguments: true,
 		})
 		expect(JSON.parse(output.trim())).toEqual(args)
 	})
