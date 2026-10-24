@@ -702,41 +702,28 @@ describe("default run_commands tool", () => {
 		expect(execute).toHaveBeenNthCalledWith(2, String.raw`Get-ChildItem Assets\Packs`, process.cwd(), expect.anything());
 	});
 
-	it("normalizes a JSON-serialized list with Windows backslashes", async () => {
+	it("recovers serialized command arrays with unescaped Windows path separators", async () => {
 		const execute = vi.fn(async (command: string) => `ran:${command}`);
 		const tool = createShellTool(execute);
-		const commands = [String.raw`dir ..\Packs`, String.raw`dir Assets\Packs`];
-		const serialized = JSON.stringify(commands);
+		const serialized = String.raw`["Get-ChildItem ..\Packs", "Get-ChildItem Assets\Packs"]`;
 
-		const result = await tool.execute(serialized as never, {
+		await tool.execute(serialized as never, {
 			agentId: "agent-1",
 			conversationId: "conv-1",
 			iteration: 1,
 		});
 
-		expect(execute).toHaveBeenCalledTimes(2);
-		expect(execute).toHaveBeenNthCalledWith(1, commands[0], process.cwd(), expect.anything());
-		expect(execute).toHaveBeenNthCalledWith(2, commands[1], process.cwd(), expect.anything());
-		expect(result).toEqual([
-			expect.objectContaining({ query: commands[0], result: `ran:${commands[0]}`, success: true }),
-			expect.objectContaining({ query: commands[1], result: `ran:${commands[1]}`, success: true }),
-		]);
-	});
-
-	it("normalizes a JSON-serialized list nested under commands", async () => {
-		const execute = vi.fn(async (command: string) => `ran:${command}`);
-		const tool = createShellTool(execute);
-		const commands = [String.raw`Get-ChildItem ..\Packs`, String.raw`Get-ChildItem Assets\Packs`];
-
-		await tool.execute({ commands: JSON.stringify(commands) } as never, {
+		await tool.execute({ commands: serialized } as never, {
 			agentId: "agent-1",
 			conversationId: "conv-1",
-			iteration: 1,
+			iteration: 2,
 		});
 
-		expect(execute).toHaveBeenCalledTimes(2);
-		expect(execute).toHaveBeenNthCalledWith(1, commands[0], process.cwd(), expect.anything());
-		expect(execute).toHaveBeenNthCalledWith(2, commands[1], process.cwd(), expect.anything());
+		expect(execute).toHaveBeenCalledTimes(4);
+		expect(execute).toHaveBeenNthCalledWith(1, String.raw`Get-ChildItem ..\Packs`, process.cwd(), expect.anything());
+		expect(execute).toHaveBeenNthCalledWith(2, String.raw`Get-ChildItem Assets\Packs`, process.cwd(), expect.anything());
+		expect(execute).toHaveBeenNthCalledWith(3, String.raw`Get-ChildItem ..\Packs`, process.cwd(), expect.anything());
+		expect(execute).toHaveBeenNthCalledWith(4, String.raw`Get-ChildItem Assets\Packs`, process.cwd(), expect.anything());
 	});
 
 	it("does not split ordinary command strings that are not JSON arrays", async () => {

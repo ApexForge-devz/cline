@@ -1,4 +1,4 @@
-import { validateWithZod } from "@cline/shared";
+import { parseJsonStream, validateWithZod } from "@cline/shared";
 import {
 	type EditFileInput,
 	INPUT_ARG_CHAR_LIMIT,
@@ -135,22 +135,34 @@ export function coalesceOrphanReadRanges(input: unknown): unknown {
 }
 
 /**
- * A few local models return the whole command list as a JSON-encoded string
- * instead of an array value, e.g. "[\"Get-ChildItem ..\\Packs\"]". Parse only
- * that unambiguous array form so its escaped Windows paths are decoded before
- * execution. Arbitrary shell strings are never split or interpreted as JSON.
+ * Parse a model-emitted JSON-encoded command array. Use the shared repair
+ * parser for common wire-format errors such as unescaped Windows path
+ * separators, but only inspect values that are already array-shaped.
+ *
+ * If an array-shaped string appears to be a serialized list but cannot be
+ * recovered, fail closed rather than executing the entire JSON payload as a
+ * shell command.
  */
 function parseSerializedCommandArray(value: string): unknown[] | undefined {
 	const trimmed = value.trim();
 	if (!trimmed.startsWith("[") || !trimmed.endsWith("]")) {
 		return undefined;
 	}
-	try {
-		const parsed: unknown = JSON.parse(trimmed);
-		return Array.isArray(parsed) ? parsed : undefined;
-	} catch {
-		return undefined;
+
+	const parsed = parseJsonStream(trimmed);
+	if (Array.isArray(parsed)) {
+		return parsed;
 	}
+
+	// Preserve ordinary shell test expressions such as `[ -d path ]`, while
+	// rejecting JSON-looking string/object arrays that failed recovery.
+	const firstEntry = trimmed.slice(1).trimStart()[0];
+	if (firstEntry === '"' || firstEntry === "'" || firstEntry === "{") {
+		throw new Error(
+			"Could not parse the serialized command array. Send commands as an array, or escape backslashes in JSON strings (for example, \\\\).",
+		);
+	}
+	return undefined;
 }
 
 export function normalizeRunCommandsInput(
