@@ -191,9 +191,9 @@ Anyone can contribute code to Cline, but we ask that you follow these guidelines
 
 6. **Before Submitting**
 
-    - Rebase your branch on the latest main
+    - Keep changes based on the intended branch in this fork. The `my-local-changes` branch intentionally diverges from the original Cline `main`; do not merge or rebase upstream changes into it as routine maintenance.
     - Ensure your branch builds successfully
-    - Double-check all tests are passing
+    - Run the relevant tests and report any checks that could not be executed
     - Review your changes for any debugging code or console logs
 
 7. **Pull Request Description**

@@ -89,76 +89,31 @@ bun release sdk --dry-run    # preview without side effects
 
 Additional SDK flags: `--skip-tests`, `--skip-git-tags`.
 
-The script checks out `main` (and pulls latest) before starting. If the working tree is dirty it aborts.
+**Fork publishing safeguard:** the SDK manifests still use the upstream-owned `@cline/*` package namespace. Non-dry-run releases are blocked unless `CLINE_ALLOW_UPSTREAM_PACKAGE_PUBLISH=1` is explicitly set. Do not set this override to publish an independent fork release. Rename the fork's package namespace and dependencies, then adapt and verify the release flow first. The CLI and platform packages are similarly guarded.
+
+The script stays on the current named branch and does not check out `main`, fetch, or pull. If the working tree is dirty it aborts.
 
 The SDK flow runs: tests → version bump → lockfile regeneration → tarball verification → publish (shared → llms → agents → core) → optional `sdk-v{VERSION}` tag creation.
 
 ### CLI Release
 
-The CLI is published through npm. Start releases from `apps/cli` with the `publish-cli` skill. The skill should guide the release prep, then offer the GitHub Actions publish path and the local publish path.
+The CLI manifest is still named `@cline/cli`, and the release scripts still target `cline` and `@cline/*` npm names. Publishing is blocked by default with the same `CLINE_ALLOW_UPSTREAM_PACKAGE_PUBLISH=1` guard.
 
-Under the hood, every release starts the same way: prepare one release commit, then choose how to publish it.
+The local release helper validates the `cli-vX.Y.Z` tag against `HEAD` and the remote named `origin`; it does not check out another branch or pull. Do not assume that `origin` is the intended fork remote without checking its URL.
 
-Prepare the release commit from the code you want to release:
+There is no `cli-publish.yml` or `sdk-publish.yml` workflow in this fork's current `.github/workflows/` directory. Do not follow upstream GitHub Actions release commands from older documentation.
 
-1. Draft user-facing release notes from the commits since the last `cli-vX.Y.Z` tag.
-2. Choose the release version.
-3. Update `apps/cli/package.json`.
-4. Add the approved notes to `apps/cli/CHANGELOG.md`.
-5. Run the requested checks.
-6. Commit the version and changelog changes.
+Until the fork's npm package identities are renamed and all release paths are verified, limit release work to dry runs and local package validation. Lifecycle hooks cannot prevent a user from manually publishing an already-created tarball through an unrelated command, so do not publish prebuilt tarballs directly.
 
-Then publish that release commit with one of these paths.
+### Manual SDK Package Validation
 
-Path A: publish from GitHub Actions.
+For local verification without publishing:
 
-Use this for normal releases. Merge the release commit to `main`, create and push the matching release tag, then run:
+1. From `sdk/`, run `bun run test` and `bun run types`.
+2. Run `bun scripts/check-publish.ts` to pack tarballs and verify dependency alignment, isolated installation, and module resolution.
+3. Inspect a packed manifest with `bun pm pack --destination <temporary-directory>` and `tar -xOf <package.tgz> package/package.json`.
 
-```sh
-git tag -a cli-vX.Y.Z -m "CLI vX.Y.Z"
-git push origin refs/tags/cli-vX.Y.Z
-gh workflow run cli-publish.yml -f publish_target=main -f git_tag=cli-vX.Y.Z -f confirm_publish=publish
-```
-
-The workflow checks out the provided `cli-vX.Y.Z` tag, verifies it matches `apps/cli/package.json`, builds the platform packages, publishes to npm with the `latest` dist-tag, creates the GitHub release, and posts to Slack.
-
-Path B: publish locally.
-
-Use this when publishing from an authenticated local machine. Start from a clean checkout at the release commit:
-
-```sh
-gh auth status
-npm whoami
-git tag -a cli-vX.Y.Z -m "CLI vX.Y.Z"
-git push origin refs/tags/cli-vX.Y.Z
-bun release cli
-gh release create cli-vX.Y.Z --verify-tag --title "CLI vX.Y.Z" --notes "Paste the approved release notes here."
-```
-
-The local helper verifies the working tree is clean, verifies `cli-vX.Y.Z` points at `HEAD` locally and on `origin`, runs tests, builds platform packages, and publishes to npm.
-
-Nightly release:
-
-```sh
-gh workflow run cli-publish.yml -f publish_target=nightly
-```
-
-Nightly also runs on a schedule. It publishes `X.Y.Z-nightly.TIMESTAMP` to npm with the `nightly` dist-tag and skips if there were no commits in the last 24 hours unless forced.
-
-### Manual SDK Publish
-
-If you need fine-grained control over individual steps:
-
-1. `bun run test`
-2. `bun version <version>` — updates all workspace package versions, regenerates models, formats, and builds.
-3. `rm bun.lock && bun install --lockfile-only` — regenerate the lockfile so `bun pm pack` resolves `workspace:*` to the new versions.
-4. `bun scripts/check-publish.ts` — pack tarballs, verify dependency alignment, test isolated install and module resolution.
-5. `npm login` — ensure you're authenticated with the npm registry.
-6. Publish in dependency order:
-   ```sh
-   cd packages/shared && bun publish && cd ../llms && bun publish && cd ../agents && bun publish && cd ../core && bun publish && cd ../../
-   ```
-7. For tagged production releases, create and push a git tag: `git tag -a sdk-v{VERSION} -m "SDK v{VERSION}" && git push origin sdk-v{VERSION}`.
+The package lifecycle guard blocks publishing under the current upstream `@cline/*` identities by default. Do not set `CLINE_ALLOW_UPSTREAM_PACKAGE_PUBLISH=1` merely to get around the guard; that override is only for an intentionally authorized upstream-namespace publication. Directly publishing a pre-created tarball can bypass lifecycle scripts, so do not publish tarballs until the fork has its own package namespace and release checks.
 
 ### Workspace Dependency Rules
 
