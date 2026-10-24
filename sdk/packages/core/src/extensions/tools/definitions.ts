@@ -581,8 +581,15 @@ export function createWebFetchTool(
 		retryable: true,
 		maxRetries: 2,
 		execute: async (input, context) => {
-			// Validate input with Zod schema
-			const validatedInput = validateWithZod(FetchWebContentInputSchema, input);
+			const normalizedInput = normalizeSerializedArrayInputs(
+				input,
+				["requests"],
+				"web-fetch request",
+			);
+			const validatedInput = validateWithZod(
+				FetchWebContentInputSchema,
+				normalizedInput,
+			);
 
 			return Promise.all(
 				validatedInput.requests.map(
@@ -841,7 +848,15 @@ export function createAskQuestionTool(
 		retryable: false,
 		maxRetries: 0,
 		execute: async (input, context) => {
-			const validatedInput = validateWithZod(AskQuestionInputSchema, input);
+			const normalizedInput = normalizeSerializedArrayInputs(
+				input,
+				["options"],
+				"question option",
+			);
+			const validatedInput = validateWithZod(
+				AskQuestionInputSchema,
+				normalizedInput,
+			);
 			return executor(validatedInput.question, validatedInput.options, context);
 		},
 	};

@@ -6,6 +6,7 @@ import {
 	createEditorTool,
 	createReadFilesTool,
 	createSearchTool,
+	createWebFetchTool,
 	createShellTool,
 	createSkillsTool,
 } from "./definitions";
@@ -205,6 +206,33 @@ describe("default ask_question tool", () => {
 		);
 	});
 
+	it("normalizes a JSON-serialized options array before validation", async () => {
+		const execute = vi.fn(async (_question: string, options: string[]) => options[1]);
+		const tool = createDefaultTools({
+			executors: { askQuestion: execute },
+			enableReadFiles: false,
+			enableSearch: false,
+			enableBash: false,
+			enableWebFetch: false,
+			enableEditor: false,
+			enableSkills: false,
+			enableAskQuestion: true,
+		}).find((candidate) => candidate.name === "ask_question");
+		if (!tool) throw new Error("Expected ask_question tool to be defined.");
+
+		await expect(tool.execute({
+			question: "Choose an option",
+			options: '[ "Option 1", "Option 2" ]',
+		} as never, {
+			agentId: "agent-1", conversationId: "conv-1", iteration: 1,
+		})).resolves.toBe("Option 2");
+		expect(execute).toHaveBeenCalledWith(
+			"Choose an option",
+			["Option 1", "Option 2"],
+			expect.anything(),
+		);
+	});
+
 	it("waits for ask_question answers without timing out", async () => {
 		vi.useFakeTimers();
 		try {
@@ -265,6 +293,30 @@ describe("default ask_question tool", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+});
+
+describe("default fetch_web_content tool", () => {
+	it("normalizes JSON-serialized request arrays before validation", async () => {
+		const execute = vi.fn(async (url: string, prompt: string) => `${prompt}: ${url}`);
+		const tool = createWebFetchTool(execute);
+		const result = await tool.execute({
+			requests: '[ { "url": "https://example.com/docs", "prompt": "Summarize this page" } ]',
+		} as never, {
+			agentId: "agent-1", conversationId: "conv-1", iteration: 1,
+		});
+
+		expect(execute).toHaveBeenCalledTimes(1);
+		expect(execute).toHaveBeenCalledWith(
+			"https://example.com/docs",
+			"Summarize this page",
+			expect.anything(),
+		);
+		expect(result).toEqual([{
+			query: "https://example.com/docs",
+			result: "Summarize this page: https://example.com/docs",
+			success: true,
+		}]);
 	});
 });
 
