@@ -134,12 +134,6 @@ export function coalesceOrphanReadRanges(input: unknown): unknown {
 	return input;
 }
 
-/**
- * Parse JSON-encoded arrays emitted as strings by some local models.
- * Repair malformed quoting/backslashes only when the input already resembles
- * an array of JSON strings or objects. This avoids interpreting shell bracket
- * expressions such as `[A-Z]` or `[ -d path ]` as tool argument arrays.
- */
 function hasTopLevelArraySeparator(value: string): boolean {
 	let inDouble = false;
 	let inSingle = false;
@@ -192,7 +186,7 @@ function hasTopLevelArraySeparator(value: string): boolean {
  * Parse JSON-encoded arrays emitted as strings by some local models.
  * Repair malformed quoting/backslashes only when the input already resembles
  * an array of JSON strings or objects. This avoids interpreting shell bracket
- * expressions such as [A-Z], ["], or [ -d path ] as tool argument arrays.
+ * expressions such as `[A-Z]`, `["]`, or `[ -d path ]` as tool argument arrays.
  */
 function parseSerializedArrayInput(
 	value: string,
@@ -247,6 +241,27 @@ function parseSerializedArrayInput(
  * Plain strings remain untouched so paths, regexes, and shell commands are not
  * reinterpreted unless they clearly look like serialized arrays.
  */
+function normalizeParsedArrayEntries(
+	entries: unknown[],
+	arrayFields: readonly string[],
+	description: string,
+): unknown[] {
+	let changed = false;
+	const normalized = entries.map((entry) => {
+		if (entry === null || typeof entry !== "object") return entry;
+		const next = normalizeSerializedArrayInputs(entry, arrayFields, description);
+		changed ||= next !== entry;
+		return next;
+	});
+	return changed ? normalized : entries;
+}
+
+/**
+ * Recover JSON-encoded arrays at the top level and in named array fields.
+ * Nested objects are visited so structured commands can also recover a
+ * serialized args array. Array string elements are left untouched: commands
+ * and regex patterns are data, not fields to parse recursively.
+ */
 export function normalizeSerializedArrayInputs(
 	input: unknown,
 	arrayFields: readonly string[],
@@ -260,21 +275,39 @@ export function normalizeSerializedArrayInputs(
 				return normalizeSerializedArrayInputs(parsed, arrayFields, description);
 			}
 		}
-		return parseSerializedArrayInput(input, description) ?? input;
+		const parsedArray = parseSerializedArrayInput(input, description);
+		return parsedArray
+			? normalizeParsedArrayEntries(parsedArray, arrayFields, description)
+			: input;
 	}
 
-	if (input === null || typeof input !== "object" || Array.isArray(input)) {
+	if (Array.isArray(input)) {
+		return normalizeParsedArrayEntries(input, arrayFields, description);
+	}
+	if (input === null || typeof input !== "object") {
 		return input;
 	}
 
 	let changed = false;
 	const normalized: Record<string, unknown> = { ...(input as Record<string, unknown>) };
-	for (const field of arrayFields) {
-		const value = normalized[field];
-		if (typeof value !== "string") continue;
-		const parsed = parseSerializedArrayInput(value, description, true);
-		if (parsed) {
-			normalized[field] = parsed;
+	for (const [field, value] of Object.entries(normalized)) {
+		if (arrayFields.includes(field) && typeof value === "string") {
+			const parsed = parseSerializedArrayInput(value, description, true);
+			if (parsed) {
+				normalized[field] = normalizeParsedArrayEntries(parsed, arrayFields, description);
+				changed = true;
+				continue;
+			}
+		}
+
+		let next = value;
+		if (Array.isArray(value)) {
+			next = normalizeParsedArrayEntries(value, arrayFields, description);
+		} else if (value !== null && typeof value === "object") {
+			next = normalizeSerializedArrayInputs(value, arrayFields, description);
+		}
+		if (next !== value) {
+			normalized[field] = next;
 			changed = true;
 		}
 	}
@@ -284,7 +317,7 @@ export function normalizeSerializedArrayInputs(
 export function normalizeRunCommandsInput(
 	input: unknown,
 ): Array<string | StructuredCommandInput> {
-	const normalizedInput = normalizeSerializedArrayInputs(input, ["commands"], "command");
+	const normalizedInput = normalizeSerializedArrayInputs(input, ["commands", "args"], "command");
 	const validate = validateWithZod(RunCommandsInputUnionSchema, normalizedInput);
 
 	if (typeof validate === "string") {

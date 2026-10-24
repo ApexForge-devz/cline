@@ -759,6 +759,29 @@ describe("default run_commands tool", () => {
 		]);
 	});
 
+	it("normalizes serialized args inside structured commands before execution", async () => {
+		const execute = vi.fn(async (command: string | { command: string; args?: string[] }) =>
+			typeof command === "string" ? command : [command.command, ...(command.args ?? [])].join("|"),
+		);
+		const tool = createShellTool(execute);
+		const nativeToolInput = {
+			commands: [{
+				command: "tool.exe",
+				args: JSON.stringify(["hello world", "it's ok"]),
+			}],
+		};
+
+		await tool.execute(nativeToolInput as never, {
+			agentId: "agent-1", conversationId: "conv-1", iteration: 1,
+		});
+
+		expect(execute).toHaveBeenCalledWith(
+			{ command: "tool.exe", args: ["hello world", "it's ok"] },
+			process.cwd(),
+			expect.anything(),
+		);
+	});
+
 	it("normalizes whitespace-padded serialized command fields before execution", async () => {
 		const execute = vi.fn(async (command: string) => `ran:${command}`);
 		const tool = createShellTool(execute);
