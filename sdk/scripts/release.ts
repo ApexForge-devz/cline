@@ -20,6 +20,7 @@ import { constants } from "node:fs";
 import { copyFile, readdir, readFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
+import { assertNamedReleaseBranch } from "./release-safety.ts";
 
 // ── CLI args ──────────────────────────────────────────────────────────────────
 
@@ -87,7 +88,6 @@ if (!dryRun && process.env.CLINE_ALLOW_UPSTREAM_PACKAGE_PUBLISH !== "1") {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const SDK_PUBLISH_ORDER = ["shared", "llms", "agents", "core", "sdk"] as const;
-const MAIN_BRANCH = "main";
 const root = join(import.meta.dir, "..", "..");
 const sdkRoot = join(import.meta.dir, "..");
 const packagesDir = join(sdkRoot, "packages");
@@ -237,34 +237,23 @@ async function resolveCliVersion(): Promise<string> {
 	return version;
 }
 
-async function ensureMainBranch(): Promise<void> {
+async function ensureReleaseBranch(): Promise<void> {
 	const branch = (
 		await run(["git", "rev-parse", "--abbrev-ref", "HEAD"], { stdout: "pipe" })
 	).trim();
 
 	if (dryRun) {
-		console.log(`  [dry-run] Current branch: ${branch || "(unknown)"}`);
-		return;
-	}
-
-	if (branch === MAIN_BRANCH) {
-		console.log(`  Already on ${MAIN_BRANCH}`);
-		return;
-	}
-
-	// Check for uncommitted changes before switching
-	const status = (
-		await run(["git", "status", "--porcelain"], { stdout: "pipe" })
-	).trim();
-	if (status) {
-		throw new Error(
-			`Working tree is dirty. Commit or stash changes before releasing.\n${status}`,
+		console.log(
+			`  [dry-run] SDK release branch: ${branch || "(unknown)"}; no checkout or pull will occur`,
 		);
+		return;
 	}
 
-	console.log(`  Switching from ${branch} to ${MAIN_BRANCH}...`);
-	await run(["git", "checkout", MAIN_BRANCH]);
-	await run(["git", "pull", "--ff-only"]);
+	await ensureCleanWorkingTree();
+	const releaseBranch = assertNamedReleaseBranch(branch);
+	console.log(
+		`  Using current branch "${releaseBranch}" for SDK release. No branch switch or pull will be performed.`,
+	);
 }
 
 async function ensureCleanWorkingTree(): Promise<void> {
@@ -546,7 +535,7 @@ async function releaseCLI(version: string): Promise<number> {
 let exitCode: number;
 if (target === "sdk") {
 	header("Checking branch");
-	await ensureMainBranch();
+	await ensureReleaseBranch();
 	const version = await resolveVersion();
 	exitCode = await releaseSDK(version);
 } else {
