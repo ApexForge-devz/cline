@@ -20,37 +20,14 @@ import {
 	shouldInstallNativeVariants,
 	validateBuildOptions,
 } from "./build-options";
+import { telemetryDefineValues } from "../src/utils/telemetry-build-env";
 
 const cliDir = resolve(import.meta.dir, "..");
 const rootDir = resolve(cliDir, "../..");
 process.chdir(cliDir);
 
-// Telemetry / OTEL environment variables that should be baked into the
-// compiled binary at build time. Mirrors the list of secrets injected by the
-// `cli-publish` GitHub Actions workflow. These are inlined via Bun's `define`
-// so the CLI ships with the production telemetry configuration without
-// requiring the end user to set any env vars.
-const BUILD_TIME_INLINED_ENV_VARS = [
-	"TELEMETRY_SERVICE_API_KEY",
-	"ERROR_SERVICE_API_KEY",
-	"OTEL_TELEMETRY_ENABLED",
-	"OTEL_LOGS_EXPORTER",
-	"OTEL_METRICS_EXPORTER",
-	"OTEL_TRACES_EXPORTER",
-	"CLINE_TRACE_SAMPLE_PERCENT",
-	"CLINE_TRACE_RECORD_CONTENT",
-	"OTEL_EXPORTER_OTLP_PROTOCOL",
-	"OTEL_EXPORTER_OTLP_ENDPOINT",
-	"OTEL_EXPORTER_OTLP_HEADERS",
-] as const;
-
-function buildInlinedEnvDefines(): Record<string, string> {
-	const defines: Record<string, string> = {};
-	for (const name of BUILD_TIME_INLINED_ENV_VARS) {
-		defines[`process.env.${name}`] = JSON.stringify(process.env[name] ?? "");
-	}
-	return defines;
-}
+// Use the same guarded telemetry definitions as the single-target CLI build.
+const telemetryDefines = telemetryDefineValues(process.env);
 
 const pkg = JSON.parse(readFileSync(join(cliDir, "package.json"), "utf-8"));
 const version: string = pkg.version;
@@ -222,7 +199,7 @@ async function buildCompiledBinary(input: {
 			OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + parserWorkerPath,
 			// Inline telemetry/OTEL env vars at build time so the compiled
 			// binary ships with production telemetry configuration baked in.
-			...buildInlinedEnvDefines(),
+			...telemetryDefines,
 		},
 		throw: false,
 	});
