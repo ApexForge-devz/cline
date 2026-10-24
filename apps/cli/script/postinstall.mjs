@@ -13,6 +13,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isHubDiscoveryShieldEnabled } from "./hub-discovery-shield.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -109,7 +110,11 @@ function main() {
 }
 
 try {
-	shieldRunningHubDiscovery();
+	// The fork disables self-updates unless a package name is explicitly set.
+	// Do not mutate the shared ~/.cline hub record on an ordinary install.
+	if (isHubDiscoveryShieldEnabled()) {
+		shieldRunningHubDiscovery();
+	}
 } catch (error) {
 	// Best-effort: without the shield the worst case is the pre-3.0.55
 	// restart-while-busy behavior, never a broken install.
