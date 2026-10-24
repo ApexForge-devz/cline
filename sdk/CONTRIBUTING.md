@@ -140,7 +140,7 @@ bun pm ls @cline/core @cline/agents @cline/llms
 
 ### CI
 
-The CI publish workflow (`.github/workflows/sdk-publish.yml`) follows the same order: build → version → check-publish → publish (shared → llms → agents → core). It supports `nightly` and `latest` channels and is triggered by manual dispatch or a daily cron.
+The workflows currently present in `.github/workflows/` are test/build workflows; this fork does not currently define an SDK or CLI publishing workflow. Check the workflow directory on the target branch before relying on CI publishing instructions.
 
 ### Root Automation Scope
 
