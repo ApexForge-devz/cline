@@ -56,6 +56,8 @@ import {
 describe("CLI feature flags policy", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+		vi.stubEnv("TELEMETRY_SERVICE_API_KEY", "");
 	});
 
 	afterEach(async () => {
