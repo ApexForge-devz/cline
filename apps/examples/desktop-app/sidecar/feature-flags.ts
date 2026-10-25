@@ -53,7 +53,7 @@ function resolveDesktopAccountContextPath(): string {
 }
 
 function hydrateDesktopAccountContextOnce(): void {
-	if (desktopAccountContextHydrated) {
+	if (desktopAccountContextHydrated || !isClineCloudServicesEnabled()) {
 		return;
 	}
 	desktopAccountContextHydrated = true;
@@ -183,6 +183,9 @@ export function setDesktopFeatureFlagsAccountContext(
 	},
 	options?: { logger?: BasicLogger },
 ): boolean {
+	// Account context is only consumed by Cline-hosted feature flags.
+	if (!isClineCloudServicesEnabled()) return false;
+
 	hydrateDesktopAccountContextOnce();
 	const accountId = account.id?.trim() || undefined;
 	const previousUserId = desktopFeatureFlagsContext.userId ?? undefined;
