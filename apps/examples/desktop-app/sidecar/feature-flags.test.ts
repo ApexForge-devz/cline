@@ -53,7 +53,7 @@ vi.mock("@cline/core/services/feature-flags/posthog", () => ({
 	PostHogFeatureFlagsProvider: mocks.PostHogFeatureFlagsProvider,
 }));
 
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -168,10 +168,30 @@ describe("getDesktopFeatureFlagsService", () => {
 });
 
 describe("feature flags context", () => {
+	beforeEach(() => {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = "1";
+	});
+
 	it("defaults to the machine distinct ID under the cline-code client name", () => {
 		const context = getDesktopFeatureFlagsContext();
 		expect(context.clientName).toBe("cline-code");
 		expect(context.distinctId).toBe("machine-distinct-id");
+	});
+
+	it("does not hydrate or update cached account identity when cloud services are disabled", () => {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = "0";
+		mkdirSync(join(tempDataDir, "cache"), { recursive: true });
+		writeFileSync(
+			accountContextPath(),
+			JSON.stringify({ version: 1, userId: "cached-account", email: "cached@example.com" }),
+		);
+
+		const context = getDesktopFeatureFlagsContext();
+		expect(context.userId).toBeUndefined();
+		expect(context.email).toBeUndefined();
+		expect(context.distinctId).toBe("machine-distinct-id");
+		expect(setDesktopFeatureFlagsAccountContext({ id: "new-account" })).toBe(false);
+		expect(existsSync(accountContextPath())).toBe(true);
 	});
 
 	it("switches to the account ID once signed in, and pushes it to the service", () => {
@@ -253,6 +273,10 @@ describe("feature flags context", () => {
 });
 
 describe("account context persistence", () => {
+	beforeEach(() => {
+		process.env.CLINE_ENABLE_CLOUD_SERVICES = "1";
+	});
+
 	it("remembers the account identity across a sidecar restart", () => {
 		setDesktopFeatureFlagsAccountContext({
 			id: "acct-1",
