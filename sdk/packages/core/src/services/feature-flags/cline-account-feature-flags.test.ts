@@ -44,6 +44,12 @@ afterEach(() => {
 });
 
 describe("Cline account beta flags", () => {
+	it("does not fetch hosted flags when cloud services are disabled", async () => {
+		vi.stubEnv("CLINE_ENABLE_CLOUD_SERVICES", "0");
+
+		expect(await isClineAccountFeatureEnabled(flag)).toBe(false);
+		expect(mocks.getAllFlagsAndPayloads).not.toHaveBeenCalled();
+	});
 	it.each([
 		false,
 		undefined,
