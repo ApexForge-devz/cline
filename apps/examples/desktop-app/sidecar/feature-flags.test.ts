@@ -53,7 +53,13 @@ vi.mock("@cline/core/services/feature-flags/posthog", () => ({
 	PostHogFeatureFlagsProvider: mocks.PostHogFeatureFlagsProvider,
 }));
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -183,7 +189,11 @@ describe("feature flags context", () => {
 		mkdirSync(join(tempDataDir, "cache"), { recursive: true });
 		writeFileSync(
 			accountContextPath(),
-			JSON.stringify({ version: 1, userId: "cached-account", email: "cached@example.com" }),
+			JSON.stringify({
+				version: 1,
+				userId: "cached-account",
+				email: "cached@example.com",
+			}),
 		);
 
 		const context = getDesktopFeatureFlagsContext();
