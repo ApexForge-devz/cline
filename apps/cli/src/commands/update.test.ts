@@ -112,15 +112,28 @@ describe("getInstallationInfo", () => {
 		});
 	});
 
+	it("rejects explicit upstream package names even through the install helper", () => {
+		const wrapperPath = createTempFile("lib/node_modules/cline/bin/cline");
+		process.env.CLINE_WRAPPER_PATH = wrapperPath;
+		process.argv = ["bun", "/$bunfs/root/cline", "update"];
+
+		expect(getInstallationInfo("1.2.3", "cline")).toEqual({
+			packageManager: PackageManager.NPM,
+		});
+		expect(getInstallationInfo("1.2.3", "@cline/cli")).toEqual({
+			packageManager: PackageManager.NPM,
+		});
+	});
+
 	it("detects npm installs from the wrapper path passed to the compiled binary", () => {
 		const wrapperPath = createTempFile("lib/node_modules/cline/bin/cline");
 		process.env.CLINE_WRAPPER_PATH = wrapperPath;
 		process.argv = ["bun", "/$bunfs/root/cline", "update", "--verbose"];
 
-		expect(getInstallationInfo("1.2.3", "cline")).toEqual({
+		expect(getInstallationInfo("1.2.3", "cline-apexforge")).toEqual({
 			packageManager: PackageManager.NPM,
-			packageName: "cline",
-			updateCommand: "npm update -g cline --tag latest",
+			packageName: "cline-apexforge",
+			updateCommand: "npm update -g cline-apexforge --tag latest",
 		});
 	});
 
@@ -129,10 +142,10 @@ describe("getInstallationInfo", () => {
 		process.env.CLINE_WRAPPER_PATH = wrapperPath;
 		process.argv = ["bun", "/$bunfs/root/cline", "update", "--verbose"];
 
-		expect(getInstallationInfo("1.2.3-nightly.456", "cline")).toEqual({
+		expect(getInstallationInfo("1.2.3-nightly.456", "cline-apexforge")).toEqual({
 			packageManager: PackageManager.NPM,
-			packageName: "cline",
-			updateCommand: "npm update -g cline --tag nightly",
+			packageName: "cline-apexforge",
+			updateCommand: "npm update -g cline-apexforge --tag nightly",
 		});
 	});
 
@@ -159,10 +172,10 @@ describe("getInstallationInfo", () => {
 		process.env.CLINE_WRAPPER_PATH = wrapperPath;
 		process.argv = ["bun", "/$bunfs/root/cline", "update", "--verbose"];
 
-		expect(getInstallationInfo("1.2.3", "cline")).toEqual({
+		expect(getInstallationInfo("1.2.3", "cline-apexforge")).toEqual({
 			packageManager: PackageManager.BUN,
-			packageName: "cline",
-			updateCommand: "bun add -g cline@latest",
+			packageName: "cline-apexforge",
+			updateCommand: "bun add -g cline-apexforge@latest",
 		});
 	});
 
