@@ -63,7 +63,10 @@ export function getCliFeatureFlagsService(options?: {
 			telemetry: options?.telemetry,
 			logger: options?.logger,
 			context: getCliFeatureFlagsContext(),
-			cacheFilePath: resolveCliFeatureFlagsCachePath(),
+			// Do not hydrate or retain stale Cline-hosted rollout values by default.
+			cacheFilePath: isClineCloudServicesEnabled()
+				? resolveCliFeatureFlagsCachePath()
+				: undefined,
 			persistentCacheMaxAgeMs: CLI_FEATURE_FLAGS_CACHE_MAX_AGE_MS,
 		});
 		registerDisposable(disposeCliFeatureFlagsService);
@@ -93,6 +96,9 @@ export function setCliFeatureFlagsAccountContext(account: {
 	id?: string;
 	email?: string;
 }): void {
+	// This context is consumed by Cline-hosted feature flags, not third-party providers.
+	if (!isClineCloudServicesEnabled()) return;
+
 	const accountId = account.id?.trim();
 	cliFeatureFlagsContext = {
 		...cliFeatureFlagsContext,
@@ -106,6 +112,7 @@ export async function identifyFeatureFlagsAccount(
 	account: { id?: string; email?: string },
 	logger?: BasicLogger,
 ): Promise<void> {
+	if (!isClineCloudServicesEnabled()) return;
 	setCliFeatureFlagsAccountContext(account);
 
 	if (!cliFeatureFlagsService) {
