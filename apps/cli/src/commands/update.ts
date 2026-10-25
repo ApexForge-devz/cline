@@ -21,15 +21,21 @@ import {
 // packages, even when an inherited environment variable names them.
 export const CLI_UPDATE_PACKAGE_NAME_ENV = "CLINE_UPDATE_PACKAGE_NAME";
 
-function getConfiguredUpdatePackageName(): string | undefined {
-	const packageName = process.env[CLI_UPDATE_PACKAGE_NAME_ENV]?.trim();
-	if (!packageName) return undefined;
+function normalizeUpdatePackageName(
+	packageName?: string,
+): string | undefined {
+	const normalizedPackageName = packageName?.trim();
+	if (!normalizedPackageName) return undefined;
 
-	const normalizedName = packageName.toLowerCase();
+	const normalizedName = normalizedPackageName.toLowerCase();
 	if (normalizedName === "cline" || normalizedName.startsWith("@cline/")) {
 		return undefined;
 	}
-	return packageName;
+	return normalizedPackageName;
+}
+
+function getConfiguredUpdatePackageName(): string | undefined {
+	return normalizeUpdatePackageName(process.env[CLI_UPDATE_PACKAGE_NAME_ENV]);
 }
 
 export enum PackageManager {
@@ -100,6 +106,7 @@ export function getInstallationInfo(
 	currentVersion: string,
 	packageName = getConfiguredUpdatePackageName(),
 ): InstallationInfo {
+	packageName = normalizeUpdatePackageName(packageName);
 	const tag = getNpmTag(currentVersion);
 	try {
 		const scriptPath = realpathSync(
